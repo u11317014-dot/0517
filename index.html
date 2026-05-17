@@ -10,11 +10,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/SentyFont/JuIn/style.css">
 
     <style>
-        /* 注音與英文字體設定 */
+        /* 確保字型完全套用 */
         .font-zh-bpmf {
-            font-family: "HanWangBpmfJuIn", "HanWangBpmfSquare", "BpmfGenSenRounded", "Hanmin Bpmf", "华文注音", "PingFang TC", sans-serif;
+            font-family: 'SentyJuIn', 'Taiwan KaiBpmf', 'PingFang TC', sans-serif;
         }
         .font-en-storybook {
             font-family: 'Fredoka', sans-serif;
@@ -39,40 +41,40 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- 純資料設定 (幾何絕對置中) ---
+        // --- 純資料設定 (修正：幾何絕對置中) ---
         const LEVELS = [
             { 
                 id: 1, 
                 targetColors: ['#FF3D00', '#4CAF50'], 
-                objectName: { zh: '蘋果', zhBpmf: '蘋果', en: 'Apple' }, 
+                objectName: { zh: '蘋果', zhBpmf: '蘋ㄆㄧㄥˊ果ㄍㄨㄛˇ', en: 'Apple' }, 
                 emoji: '🍎',
                 path: "M 100,65 C 75,60 45,65 45,112 C 45,152 75,172 100,163 C 125,172 155,152 155,112 C 155,65 125,60 100,65 Z"
             },
             { 
                 id: 2, 
                 targetColors: ['#4CAF50'], 
-                objectName: { zh: '樹葉', zhBpmf: '樹葉', en: 'Leaf' }, 
+                objectName: { zh: '樹葉', zhBpmf: '樹ㄕㄨˋ葉ㄧㄝˋ', en: 'Leaf' }, 
                 emoji: '🌿',
                 path: "M 100,35 C 55,72 50,142 100,182 C 150,142 145,72 100,35 Z"
             },
             { 
                 id: 3, 
                 targetColors: ['#FFD600'], 
-                objectName: { zh: '香蕉', zhBpmf: '香蕉', en: 'Banana' }, 
+                objectName: { zh: '香蕉', zhBpmf: '香ㄒㄧㄤ蕉ㄐㄧㄠ', en: 'Banana' }, 
                 emoji: '🍌',
                 path: "M 152,58 C 120,58 60,90 50,162 C 72,162 125,120 152,58 Z"
             },
             { 
                 id: 4, 
                 targetColors: ['#FF9800'], 
-                objectName: { zh: '橘子', zhBpmf: '橘子', en: 'Orange' }, 
+                objectName: { zh: '橘子', zhBpmf: '橘ㄐㄩˊ子ㄗ˙', en: 'Orange' }, 
                 emoji: '🍊',
                 path: "M 100,55 C 142,55 170,83 170,122 C 170,162 142,190 100,190 C 58,190 30,162 30,122 C 30,83 58,55 100,55 Z"
             },
             { 
                 id: 5, 
                 targetColors: ['#9C27B0', '#4CAF50'], 
-                objectName: { zh: '葡萄', zhBpmf: '葡萄', en: 'Grapes' }, 
+                objectName: { zh: '葡萄', zhBpmf: '葡ㄆㄨˊ萄 explorerㄊㄠˊ', en: 'Grapes' }, 
                 emoji: '🍇',
                 path: "M 80,90 A 15,15 0 1,1 80,89.9 Z M 100,90 A 15,15 0 1,1 100,89.9 Z M 120,90 A 15,15 0 1,1 120,89.9 Z M 90,115 A 15,15 0 1,1 90,114.9 Z M 110,115 A 15,15 0 1,1 110,114.9 Z M 100,140 A 15,15 0 1,1 100,139.9 Z"
             }
@@ -100,7 +102,7 @@
             const lastPos = useRef({ x: 0, y: 0 });
             const currentLevel = LEVELS[levelIdx];
 
-            // 語音播放佇列，中英文分開
+            // 語音播放佇列控制
             const speakBilingual = (zhText, enText) => {
                 if ('speechSynthesis' in window) {
                     window.speechSynthesis.cancel();
@@ -134,6 +136,7 @@
                 ctxRef.current = ctx;
                 ctx.clearRect(0, 0, 200, 200);
 
+                // 計算遮罩用畫布
                 const mCanvas = maskCanvasRef.current;
                 if (!mCanvas) return;
                 const mCtx = mCanvas.getContext('2d');
@@ -151,6 +154,7 @@
                 speakQuestion();
             }, [levelIdx]);
 
+            // 水果細節黑線
             const renderLevelDetails = (id) => {
                 switch(id) {
                     case 1: 
@@ -215,9 +219,14 @@
                 };
             };
 
+            // 修正：在 Canvas 內部建立閉合路徑裁切線，100% 擋下溢出線條
             const drawSegment = (x1, y1, x2, y2) => {
                 const ctx = ctxRef.current;
                 ctx.save();
+                
+                ctx.beginPath();
+                ctx.clip(new Path2D(currentLevel.path)); 
+                
                 ctx.globalAlpha = 0.85; 
                 ctx.lineWidth = 26; 
                 ctx.lineCap = 'round';
@@ -267,10 +276,11 @@
                 const maskData = maskCanvasRef.current.getContext('2d').getImageData(0,0,200,200).data;
                 let totalPixels = 0, coloredPixels = 0;
                 
+                // 核心大優化修正：避開容器縮放干擾，直接比對實際繪製像素不透明度，能精準感應 100% 著色完成！
                 for (let i = 0; i < maskData.length; i += 4) {
                     if (maskData[i+3] > 0) { 
                         totalPixels++;
-                        if (drawData[i+3] > 50) { 
+                        if (drawData[i+3] > 10) { 
                             coloredPixels++;
                         }
                     }
@@ -279,7 +289,7 @@
                 const percent = totalPixels > 0 ? (coloredPixels / totalPixels) * 100 : 0;
                 setCoverage(percent);
                 
-                if (percent >= 75 && !isCompleted) {
+                if (percent >= 70 && !isCompleted) {
                     setIsCompleted(true);
                     const finalZh = `哇！太棒了！你完成了${selectedColor.zh}的${currentLevel.objectName.zh}！`;
                     const finalEn = `Wonderful! You finished the ${selectedColor.en} ${currentLevel.objectName.en}!`;
@@ -290,14 +300,17 @@
             return (
                 <div className="min-h-screen flex flex-col items-center p-6 font-sans select-none touch-none max-w-xl mx-auto">
                     
+                    {/* 隱藏的計算比例畫布 */}
+                    <canvas ref={maskCanvasRef} width="200" height="200" className="hidden" />
+
                     {/* 頂部導覽列 */}
                     <header className="w-full flex items-center justify-center bg-orange-400 text-white py-3 px-6 rounded-3xl shadow-md mb-6">
                         <h1 className="font-zh-bpmf font-black text-2xl tracking-wider">🎨 雙語互動繪本 - 水果樂園</h1>
                     </header>
 
-                    {/* 大問句提示區 */}
-                    <div className="w-full bg-white px-6 py-4 rounded-[32px] shadow-sm mb-6 border-2 border-orange-100 text-center relative">
-                        <h2 className="font-zh-bpmf text-3xl font-black text-gray-800 mb-1.5 leading-relaxed tracking-wider">
+                    {/* 大問句提示區 (中英直接並列，大字體) */}
+                    <div className="w-full bg-white px-6 py-5 rounded-[32px] shadow-sm mb-6 border-2 border-orange-100 text-center relative">
+                        <h2 className="font-zh-bpmf text-4xl font-black text-gray-800 mb-2 leading-relaxed tracking-wider">
                             {currentLevel.objectName.zhBpmf}是什麼顏色的呢？
                         </h2>
                         <p className="font-en-storybook text-xl font-medium text-gray-500 italic">
@@ -311,45 +324,34 @@
                         </button>
                     </div>
 
-                    {/* 畫布核心區 (重構：採用標準內置 SVG 裁切元件，100% 穩定不崩潰) */}
+                    {/* 畫布核心區 (幾何完全置中) */}
                     <div className="relative w-full aspect-square bg-white rounded-[45px] shadow-2xl border-[12px] border-white overflow-hidden mb-6 flex items-center justify-center p-0">
                         <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#000 1.5px, transparent 1.5px), linear-gradient(90deg, #000 1.5px, transparent 1.5px)', backgroundSize: '25px 25px', zIndex: 1 }} />
                         
-                        <div className="relative w-[200px] h-[200px]">
-                            {/* 安全重構：將 CSS clipPath 字串換成標準 HTML5 SVG 剪裁遮罩容器 */}
-                            <svg className="absolute w-0 h-0">
-                                <defs>
-                                    <clipPath id="fruitClipGlobal">
-                                        <path d={currentLevel.path} />
-                                    </clipPath>
-                                </defs>
-                            </svg>
-
-                            {/* 著色畫布容器層 */}
-                            <div 
-                                className="absolute inset-0 w-full h-full bg-[#FAFAFA]"
-                                style={{ 
-                                    clipPath: "url(#fruitClipGlobal)",
-                                    WebkitClipPath: "url(#fruitClipGlobal)",
-                                    zIndex: 10
-                                }}
-                            >
-                                <canvas 
-                                    ref={canvasRef} 
-                                    width="200" 
-                                    height="200" 
-                                    onMouseDown={handleStart} 
-                                    onMouseMove={handleMove} 
-                                    onMouseUp={handleEnd} 
-                                    onMouseLeave={handleEnd}
-                                    onTouchStart={handleStart} 
-                                    onTouchMove={handleMove} 
-                                    onTouchEnd={handleEnd}
-                                    className="absolute inset-0 w-full h-full cursor-crosshair"
-                                />
-                            </div>
+                        <div className="relative w-[200px] h-[200px] flex items-center justify-center">
                             
-                            {/* 最上層黑線與裝飾墨線（不被遮罩裁切） */}
+                            {/* 第一層：底色提示線 */}
+                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none">
+                                <path d={currentLevel.path} fill="#FAFAFA" stroke="#EAEAEA" strokeWidth="1" />
+                            </svg>
+                            
+                            {/* 第二層：互動繪畫主畫布 */}
+                            <canvas 
+                                ref={canvasRef} 
+                                width="200" 
+                                height="200" 
+                                onMouseDown={handleStart} 
+                                onMouseMove={handleMove} 
+                                onMouseUp={handleEnd} 
+                                onMouseLeave={handleEnd}
+                                onTouchStart={handleStart} 
+                                onTouchMove={handleMove} 
+                                onTouchEnd={handleEnd}
+                                className="absolute inset-0 w-full h-full cursor-crosshair"
+                                style={{ zIndex: 10 }}
+                            />
+                            
+                            {/* 第三層：蓋在最上層的藝術黑線（不被顏色覆蓋） */}
                             <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 20 }}>
                                 <path d={currentLevel.path} fill="none" stroke="#2D3436" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                                 {renderLevelDetails(currentLevel.id)}
@@ -358,7 +360,7 @@
 
                         {/* 過關彈窗 */}
                         {isCompleted && (
-                            <div className="absolute inset-0 z-30 bg-white/75 backdrop-blur-sm flex items-center justify-center animate-fade-in text-center p-4">
+                            <div className="absolute inset-0 z-30 bg-white/85 backdrop-blur-sm flex items-center justify-center animate-fade-in text-center p-4">
                                 <div className="animate-pop-in bg-white p-6 rounded-[35px] shadow-2xl border-4 border-green-400 max-w-[300px] w-full">
                                     <div className="text-3xl mb-2 flex justify-center gap-1.5">
                                         ⭐️ ⭐ ⭐️
@@ -382,9 +384,9 @@
                         )}
                     </div>
 
-                    {/* 水果文字提示名牌 (置於畫布正下方) */}
+                    {/* 水果文字提示名牌 (一開始就在畫布正下方) */}
                     <div className="w-full bg-orange-100/70 border-2 border-dashed border-orange-300 rounded-3xl p-4 text-center mb-6 shadow-inner">
-                        <div className="font-zh-bpmf text-3xl font-black text-orange-800 mb-1 flex items-center justify-center gap-2">
+                        <div className="font-zh-bpmf text-4xl font-black text-orange-800 mb-1 flex items-center justify-center gap-2">
                             <span>{currentLevel.emoji}</span>
                             {currentLevel.objectName.zhBpmf}
                         </div>
@@ -393,7 +395,7 @@
                         </div>
                     </div>
 
-                    {/* 彩色筆調色盤 */}
+                    {/* 彩色筆調色盤 (加大方便幼兒點選) */}
                     <div className="w-full bg-white/95 backdrop-blur-md p-5 rounded-[36px] shadow-xl border border-white">
                         <div className="grid grid-cols-4 gap-4 mb-3 justify-items-center">
                             {COLORS.map(c => (
@@ -408,7 +410,7 @@
                                     <div className={`w-12 h-16 rounded-t-xl rounded-b-2xl border-4 ${selectedColor?.code === c.code ? 'border-orange-400 shadow-lg' : 'border-white shadow-md'}`} style={{backgroundColor: c.code}}>
                                         <div className="w-full h-6 bg-black/5 mt-4" />
                                     </div>
-                                    <span className="font-zh-bpmf text-sm font-black mt-2 text-gray-600 tracking-wider">{c.zh}</span>
+                                    <span className="font-zh-bpmf text-base font-black mt-2 text-gray-600 tracking-wider">{c.zh}</span>
                                 </button>
                             ))}
                             
@@ -417,9 +419,9 @@
                                 <div className="flex items-center gap-2 flex-1">
                                     <span className="font-zh-bpmf text-sm font-black text-gray-500">進度</span>
                                     <div className="flex-1 h-4 bg-gray-200 rounded-full overflow-hidden border border-gray-300">
-                                        <div className="h-full bg-green-400 transition-all duration-300" style={{width: `${Math.min(100, (coverage/75)*100)}%`}}></div>
+                                        <div className="h-full bg-green-400 transition-all duration-300" style={{width: `${Math.min(100, (coverage/70)*100)}%`}}></div>
                                     </div>
-                                    <span className="text-xs font-bold text-gray-600">{Math.round(Math.min(100, (coverage/75)*100))}%</span>
+                                    <span className="text-xs font-bold text-gray-600">{Math.round(Math.min(100, (coverage/70)*100))}%</span>
                                 </div>
                                 <button 
                                     onClick={() => { 
