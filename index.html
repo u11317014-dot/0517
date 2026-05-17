@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>雙語著色大師 - 水果樂園</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        .animate-pop-in { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        canvas { touch-action: none; }
+    </style>
+</head>
+<body class="bg-[#FFFBEB]">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const LEVELS = [
+            { 
+                id: 1, 
+                targetColor: '#FF3D00', 
+                colorName: { zh: '紅色', en: 'Red' }, 
+                objectName: { zh: '蘋果', en: 'Apple' }, 
+                path: "M100,60 C85,60 70,65 60,80 C50,100 50,140 70,160 C85,175 115,175 130,160 C150,140 150,100 140,80 C130,65 115,60 100,60 Z",
+                details: <g fill="none" stroke="#2D3436" strokeWidth="2">
+                    <path d="M100,60 L100,45" stroke="#795548" strokeWidth="4" strokeLinecap="round" />
+                    <path d="M100,50 Q120,35 130,50 Q115,55 100,50" fill="#4CAF50" stroke="#2E7D32" />
+                </g>
+            },
+            { 
+                id: 2, 
+                targetColor: '#4CAF50', 
+                colorName: { zh: '綠色', en: 'Green' }, 
+                objectName: { zh: '樹葉', en: 'Leaf' }, 
+                path: "M100,40 C60,40 40,80 40,120 C40,160 100,180 100,180 C100,180 160,160 160,120 C160,80 140,40 100,40 Z",
+                details: <g fill="none" stroke="#2D3436" strokeWidth="2" opacity="0.4">
+                    <path d="M100,40 L100,180" />
+                    <path d="M100,70 L140,100 M100,100 L150,130 M100,130 L140,160" />
+                    <path d="M100,70 L60,100 M100,100 L50,130 M100,130 L60,160" />
+                </g>
+            },
+            { 
+                id: 3, 
+                targetColor: '#FFD600', 
+                colorName: { zh: '黃色', en: 'Yellow' }, 
+                objectName: { zh: '香蕉', en: 'Banana' }, 
+                path: "M160,60 C150,50 120,45 80,70 C40,100 40,150 50,170 C60,180 75,170 70,160 C65,140 70,100 110,85 C140,75 160,75 160,60 Z",
+                details: <path d="M160,60 L175,50" stroke="#795548" strokeWidth="6" strokeLinecap="round" />
+            },
+            { 
+                id: 4, 
+                targetColor: '#FF9800', 
+                colorName: { zh: '橘色', en: 'Orange' }, 
+                objectName: { zh: '橘子', en: 'Orange' }, 
+                path: "M100,60 C135,60 165,90 165,125 C165,160 135,190 100,190 C65,190 35,160 35,125 C35,90 65,60 100,60 Z",
+                details: <g>
+                    <circle cx="100" cy="65" r="3" fill="#2D3436" />
+                    <path d="M100,65 Q115,45 130,55 Q115,60 100,65" fill="#4CAF50" stroke="#2D3436" strokeWidth="1" />
+                </g>
+            },
+            { 
+                id: 5, 
+                targetColor: '#9C27B0', 
+                colorName: { zh: '紫色', en: 'Purple' }, 
+                objectName: { zh: '葡萄', en: 'Grapes' }, 
+                // 葡萄的路徑設計為一串果實的輪廓
+                path: "M100,70 Q120,70 130,85 Q140,100 130,115 Q140,130 125,145 Q115,160 100,170 Q85,160 75,145 Q60,130 70,115 Q60,100 70,85 Q80,70 100,70 Z",
+                details: <g fill="none" stroke="#2D3436" strokeWidth="1.5">
+                    <path d="M100,70 L100,50 Q110,40 120,55" stroke="#795548" strokeWidth="3" fill="none" />
+                    <circle cx="100" cy="95" r="15" opacity="0.3" />
+                    <circle cx="80" cy="110" r="15" opacity="0.3" />
+                    <circle cx="120" cy="110" r="15" opacity="0.3" />
+                    <circle cx="100" cy="125" r="15" opacity="0.3" />
+                </g>
+            }
+        ];
+
+        const COLORS = [
+            { zh: '紅色', en: 'Red', code: '#FF3D00' },
+            { zh: '黃色', en: 'Yellow', code: '#FFD600' },
+            { zh: '綠色', en: 'Green', code: '#4CAF50' },
+            { zh: '藍色', en: 'Blue', code: '#2196F3' },
+            { zh: '橘色', en: 'Orange', code: '#FF9800' },
+            { zh: '紫色', en: 'Purple', code: '#9C27B0' }
+        ];
+
+        const App = () => {
+            const [levelIdx, setLevelIdx] = useState(0);
+            const [lang, setLang] = useState('zh');
+            const [selectedColor, setSelectedColor] = useState(null);
+            const [coverage, setCoverage] = useState(0);
+            const [isCompleted, setIsCompleted] = useState(false);
+            const [isDrawing, setIsDrawing] = useState(false);
+            
+            const canvasRef = useRef(null);
+            const maskCanvasRef = useRef(null);
+            const ctxRef = useRef(null);
+            const currentLevel = LEVELS[levelIdx];
+
+            const speak = (text, language) => {
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = language === 'zh' ? 'zh-TW' : 'en-US';
+                    utterance.rate = 0.9;
+                    window.speechSynthesis.speak(utterance);
+                }
+            };
+
+            const speakBilingual = (zh, en) => {
+                speak(zh, 'zh');
+                setTimeout(() => speak(en, 'en'), 1200);
+            };
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                ctxRef.current = ctx;
+                ctx.clearRect(0, 0, 200, 200);
+                
+                const mCanvas = maskCanvasRef.current;
+                const mCtx = mCanvas.getContext('2d');
+                mCtx.clearRect(0, 0, 200, 200);
+                mCtx.fill(new Path2D(currentLevel.path));
+
+                setCoverage(0);
+                setIsCompleted(false);
+                speakBilingual(`請把${currentLevel.objectName.zh}塗上${currentLevel.colorName.zh}`, `Color the ${currentLevel.objectName.en} ${currentLevel.colorName.en}`);
+            }, [levelIdx]);
+
+            const getPos = (e) => {
+                const rect = canvasRef.current.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                return {
+                    x: (clientX - rect.left) * (200 / rect.width),
+                    y: (clientY - rect.top) * (200 / rect.height)
+                };
+            };
+
+            const handleStart = (e) => {
+                if (isCompleted || !selectedColor) return;
+                if (selectedColor.code !== currentLevel.targetColor) {
+                    speakBilingual(`這不是${currentLevel.colorName.zh}`, `That's not ${currentLevel.colorName.en}`);
+                    return;
+                }
+                setIsDrawing(true);
+                ctxRef.current.beginPath();
+            };
+
+            const handleMove = (e) => {
+                if (!isDrawing) return;
+                const { x, y } = getPos(e);
+                const ctx = ctxRef.current;
+                ctx.save();
+                ctx.clip(new Path2D(currentLevel.path));
+                ctx.globalAlpha = 0.4;
+                ctx.lineWidth = 30;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = selectedColor.code;
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                ctx.restore();
+            };
+
+            const handleEnd = () => {
+                if (!isDrawing) return;
+                setIsDrawing(false);
+                const drawData = ctxRef.current.getImageData(0,0,200,200).data;
+                const maskData = maskCanvasRef.current.getContext('2d').getImageData(0,0,200,200).data;
+                let total = 0, colored = 0;
+                for(let i=0; i<maskData.length; i+=4) {
+                    if(maskData[i+3] > 0) {
+                        total++;
+                        if(drawData[i+3] > 30) colored++;
+                    }
+                }
+                const res = (colored/total)*100;
+                setCoverage(res);
+                if(res > 80 && !isCompleted) {
+                    setIsCompleted(true);
+                    speakBilingual("好棒喔！你完成了！", "Wonderful! You finished it!");
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col items-center p-4 font-sans">
+                    <canvas ref={maskCanvasRef} width="200" height="200" className="hidden" />
+                    
+                    <header className="w-full max-w-md flex justify-between items-center mb-6">
+                        <div className="flex items-center gap-2">
+                            <div className="bg-orange-500 p-2 rounded-xl text-white shadow-lg"><i data-lucide="palette"></i></div>
+                            <div>
+                                <h1 className="font-black text-gray-800 text-lg">Bilingual Coloring</h1>
+                                <p className="text-[10px] text-orange-500 font-bold uppercase tracking-tighter">Learning Fruits</p>
+                            </div>
+                        </div>
+                        <button onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} className="bg-white px-4 py-1.5 rounded-full text-sm font-bold shadow-md border-2 border-orange-100 hover:bg-orange-50 active:scale-95 transition-all">
+                            {lang === 'zh' ? 'English' : '中文'}
+                        </button>
+                    </header>
+
+                    <div className="text-center mb-6">
+                        <div className="inline-block bg-white px-6 py-2 rounded-2xl shadow-md mb-3 border-2 border-white">
+                            <h2 className="text-2xl font-black text-gray-800">
+                                {lang === 'zh' ? `請塗上 ${currentLevel.colorName.zh}` : `Color it ${currentLevel.colorName.en}`}
+                            </h2>
+                        </div>
+                        <div className="flex items-center gap-3 justify-center text-gray-500 font-bold">
+                            <span className="text-sm">{lang === 'zh' ? '進度' : 'Progress'}</span>
+                            <div className="w-40 h-3 bg-gray-200 rounded-full overflow-hidden border border-gray-300">
+                                <div className="h-full bg-green-400 transition-all duration-300" style={{width: `${Math.min(100, (coverage/80)*100)}%`}}></div>
+                            </div>
+                            <span className={`text-sm ${coverage >= 80 ? 'text-green-500' : ''}`}>{Math.round(Math.min(100, (coverage/80)*100))}%</span>
+                        </div>
+                    </div>
+
+                    <div className="relative w-full max-w-sm aspect-square bg-white rounded-[50px] shadow-2xl border-[12px] border-white overflow-hidden mb-8">
+                        <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#000 1.5px, transparent 1.5px), linear-gradient(90deg, #000 1.5px, transparent 1.5px)', backgroundSize: '25px 25px' }} />
+                        
+                        <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full p-8 pointer-events-none">
+                            <path d={currentLevel.path} fill="#fcfcfc" stroke="#eee" strokeWidth="1" />
+                        </svg>
+                        
+                        <canvas 
+                            ref={canvasRef} width="200" height="200" 
+                            onMouseDown={handleStart} onMouseMove={handleMove} onMouseUp={handleEnd} onMouseLeave={handleEnd}
+                            onTouchStart={handleStart} onTouchMove={handleMove} onTouchEnd={handleEnd}
+                            className="absolute inset-0 w-full h-full p-8 z-10 cursor-crosshair"
+                        />
+                        
+                        <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full p-8 pointer-events-none z-20">
+                            <path d={currentLevel.path} fill="none" stroke="#2D3436" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                            {currentLevel.details}
+                        </svg>
+
+                        {isCompleted && (
+                            <div className="absolute inset-0 z-30 bg-white/70 backdrop-blur-sm flex items-center justify-center animate-fade-in text-center">
+                                <div className="animate-pop-in bg-white p-8 rounded-[40px] shadow-2xl border-4 border-green-400">
+                                    <div className="text-4xl mb-2 text-yellow-400 font-black">★★★</div>
+                                    <p className="text-2xl font-black text-green-600 mb-1">{lang === 'zh' ? '太棒了！' : 'EXCELLENT!'}</p>
+                                    <p className="text-sm text-gray-500 font-bold mb-6">{lang === 'zh' ? `這是一個${currentLevel.objectName.zh}` : `This is an ${currentLevel.objectName.en}`}</p>
+                                    <button onClick={() => setLevelIdx((levelIdx+1)%LEVELS.length)} className="bg-green-500 text-white px-10 py-3 rounded-2xl font-black shadow-lg hover:bg-green-600 active:scale-95 transition-all">
+                                        {lang === 'zh' ? '下一關' : 'Next'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-4 bg-white/80 backdrop-blur-md p-6 rounded-[35px] shadow-xl border border-white max-w-lg w-full">
+                        {COLORS.map(c => (
+                            <button key={c.code} onClick={() => { setSelectedColor(c); speakBilingual(c.zh, c.en); }}
+                                className={`flex flex-col items-center transition-all duration-300 ${selectedColor?.code === c.code ? 'scale-110 -translate-y-3' : 'opacity-60 hover:opacity-100'}`}>
+                                <div className={`w-10 h-16 rounded-t-lg rounded-b-xl border-4 ${selectedColor?.code === c.code ? 'border-orange-300' : 'border-white'} shadow-md`} style={{backgroundColor: c.code}}>
+                                    <div className="w-full h-6 bg-black/5 mt-4" />
+                                </div>
+                                <span className="text-[10px] font-black mt-2 text-gray-500 uppercase">{lang === 'zh' ? c.zh : c.en}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+        
+        setTimeout(() => lucide.createIcons(), 500);
+    </script>
+</body>
+</html>
