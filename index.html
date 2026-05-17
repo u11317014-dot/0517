@@ -4,17 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>雙語著色大師 - 水果樂園</title>
+    <!-- 載入前端核心套件 (React, ReactDOM, Babel 轉譯器, Tailwind CSS) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes popIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
-        .animate-pop-in { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+        @keyframes confettiFall {
+            0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(400px) rotate(360deg); opacity: 0; }
+        }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        .animate-pop-in { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .animate-confetti { animation: confettiFall 3s linear infinite; position: absolute; }
         canvas { touch-action: none; }
+        body { -webkit-tap-highlight-color: transparent; }
     </style>
 </head>
 <body class="bg-[#FFFBEB]">
@@ -23,66 +29,51 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        // --- 純資料設定 (優化後的精確水果輪廓 Path) ---
         const LEVELS = [
             { 
                 id: 1, 
                 targetColor: '#FF3D00', 
                 colorName: { zh: '紅色', en: 'Red' }, 
                 objectName: { zh: '蘋果', en: 'Apple' }, 
-                path: "M100,60 C85,60 70,65 60,80 C50,100 50,140 70,160 C85,175 115,175 130,160 C150,140 150,100 140,80 C130,65 115,60 100,60 Z",
-                details: <g fill="none" stroke="#2D3436" strokeWidth="2">
-                    <path d="M100,60 L100,45" stroke="#795548" strokeWidth="4" strokeLinecap="round" />
-                    <path d="M100,50 Q120,35 130,50 Q115,55 100,50" fill="#4CAF50" stroke="#2E7D32" />
-                </g>
+                // 優化後的蘋果：完美左右對稱、心形凹陷與渾圓底座
+                path: "M100,68 C85,63 45,68 45,115 C45,155 75,175 100,168 C125,175 155,155 155,115 C155,68 115,63 100,68 Z"
             },
             { 
                 id: 2, 
                 targetColor: '#4CAF50', 
                 colorName: { zh: '綠色', en: 'Green' }, 
                 objectName: { zh: '樹葉', en: 'Leaf' }, 
-                path: "M100,40 C60,40 40,80 40,120 C40,160 100,180 100,180 C100,180 160,160 160,120 C160,80 140,40 100,40 Z",
-                details: <g fill="none" stroke="#2D3436" strokeWidth="2" opacity="0.4">
-                    <path d="M100,40 L100,180" />
-                    <path d="M100,70 L140,100 M100,100 L150,130 M100,130 L140,160" />
-                    <path d="M100,70 L60,100 M100,100 L50,130 M100,130 L60,160" />
-                </g>
+                // 優化後的樹葉：流線型的對稱梭形葉片
+                path: "M100,40 C55,75 50,145 100,185 C150,145 145,75 100,40 Z"
             },
             { 
                 id: 3, 
                 targetColor: '#FFD600', 
                 colorName: { zh: '黃色', en: 'Yellow' }, 
                 objectName: { zh: '香蕉', en: 'Banana' }, 
-                path: "M160,60 C150,50 120,45 80,70 C40,100 40,150 50,170 C60,180 75,170 70,160 C65,140 70,100 110,85 C140,75 160,75 160,60 Z",
-                details: <path d="M160,60 L175,50" stroke="#795548" strokeWidth="6" strokeLinecap="round" />
+                // 優化後的香蕉：流暢的月牙新月形弧度
+                path: "M155,55 C120,55 55,90 45,165 C68,165 125,120 155,55 Z"
             },
             { 
                 id: 4, 
                 targetColor: '#FF9800', 
                 colorName: { zh: '橘色', en: 'Orange' }, 
                 objectName: { zh: '橘子', en: 'Orange' }, 
-                path: "M100,60 C135,60 165,90 165,125 C165,160 135,190 100,190 C65,190 35,160 35,125 C35,90 65,60 100,60 Z",
-                details: <g>
-                    <circle cx="100" cy="65" r="3" fill="#2D3436" />
-                    <path d="M100,65 Q115,45 130,55 Q115,60 100,65" fill="#4CAF50" stroke="#2D3436" strokeWidth="1" />
-                </g>
+                // 優化後的橘子：正圓形稍微壓扁的可愛柑橘造型
+                path: "M100,55 C145,55 175,83 175,125 C175,167 145,195 100,195 C55,195 25,167 25,125 C25,83 55,55 100,55 Z"
             },
             { 
                 id: 5, 
                 targetColor: '#9C27B0', 
                 colorName: { zh: '紫色', en: 'Purple' }, 
                 objectName: { zh: '葡萄', en: 'Grapes' }, 
-                // 葡萄的路徑設計為一串果實的輪廓
-                path: "M100,70 Q120,70 130,85 Q140,100 130,115 Q140,130 125,145 Q115,160 100,170 Q85,160 75,145 Q60,130 70,115 Q60,100 70,85 Q80,70 100,70 Z",
-                details: <g fill="none" stroke="#2D3436" strokeWidth="1.5">
-                    <path d="M100,70 L100,50 Q110,40 120,55" stroke="#795548" strokeWidth="3" fill="none" />
-                    <circle cx="100" cy="95" r="15" opacity="0.3" />
-                    <circle cx="80" cy="110" r="15" opacity="0.3" />
-                    <circle cx="120" cy="110" r="15" opacity="0.3" />
-                    <circle cx="100" cy="125" r="15" opacity="0.3" />
-                </g>
+                // 核心修正：將外框路徑與內部 6 顆圓圈細節（半徑 15）的外沿完全對齊，確保著色區域百分之百重合
+                path: "M80,75 C90,75 110,75 120,75 C132,75 135,85 135,100 C135,110 128,115 125,120 C125,122 122,126 115,130 C115,133 112,143 100,155 C88,143 85,133 85,130 C78,126 75,122 75,120 C72,115 65,110 65,100 C65,85 68,75 80,75 Z"
             }
         ];
 
+        // 適合幼兒的亮麗彩色筆設定
         const COLORS = [
             { zh: '紅色', en: 'Red', code: '#FF3D00' },
             { zh: '黃色', en: 'Yellow', code: '#FFD600' },
@@ -92,6 +83,66 @@
             { zh: '紫色', en: 'Purple', code: '#9C27B0' }
         ];
 
+        // --- 純 React SVG 圖擺元件 ---
+        const PaletteIcon = () => (
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.03456 19.176 5.09705 19.435 5.01633 19.6773C4.85691 20.1557 4.77 20.6678 4.77 21.2C4.77 21.6418 5.12817 22 5.57 22H12Z" />
+                <circle cx="7.5" cy="10.5" r="1.5" fill="currentColor" />
+                <circle cx="11.5" cy="7.5" r="1.5" fill="currentColor" />
+                <circle cx="16.5" cy="9.5" r="1.5" fill="currentColor" />
+                <circle cx="15.5" cy="14.5" r="1.5" fill="currentColor" />
+            </svg>
+        );
+
+        const LanguagesIcon = () => (
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m5 8 6 6" /><path d="m4 14 6-6 2-3" /><path d="M2 5h12" /><path d="M7 2h1" /><path d="m22 22-5-10-5 10" /><path d="M14 18h6" /><path d="M12 5c.6 2 2 4 4 5.5" /><path d="M20 5c-.3 1.2-1.2 2.7-3 4" />
+            </svg>
+        );
+
+        const VolumeIcon = () => (
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+            </svg>
+        );
+
+        const RotateCcwIcon = () => (
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><polyline points="3 3 3 8 8 8" />
+            </svg>
+        );
+
+        const StarIcon = ({ fill = "none" }) => (
+            <svg className="w-7 h-7 text-yellow-400" viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+        );
+
+        const ChevronRightIcon = () => (
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+            </svg>
+        );
+
+        // --- 慶祝碎紙花特效 ---
+        const Confetti = () => {
+            return Array.from({ length: 30 }).map((_, i) => (
+                <div 
+                    key={i}
+                    className="animate-confetti w-3 h-3 rounded-sm"
+                    style={{
+                        backgroundColor: ['#FF3D00', '#FFD600', '#4CAF50', '#2196F3', '#FF9800', '#9C27B0'][i % 6],
+                        left: `${Math.random() * 100}%`,
+                        top: `-20px`,
+                        animationDelay: `${Math.random() * 2.5}s`,
+                        transform: `rotate(${Math.random() * 360}deg)`
+                    }}
+                />
+            ));
+        };
+
+        // --- 主應用元件 ---
         const App = () => {
             const [levelIdx, setLevelIdx] = useState(0);
             const [lang, setLang] = useState('zh');
@@ -103,6 +154,7 @@
             const canvasRef = useRef(null);
             const maskCanvasRef = useRef(null);
             const ctxRef = useRef(null);
+            const lastPos = useRef({ x: 0, y: 0 });
             const currentLevel = LEVELS[levelIdx];
 
             const speak = (text, language) => {
@@ -110,14 +162,14 @@
                     window.speechSynthesis.cancel();
                     const utterance = new SpeechSynthesisUtterance(text);
                     utterance.lang = language === 'zh' ? 'zh-TW' : 'en-US';
-                    utterance.rate = 0.9;
+                    utterance.rate = 0.95;
                     window.speechSynthesis.speak(utterance);
                 }
             };
 
             const speakBilingual = (zh, en) => {
                 speak(zh, 'zh');
-                setTimeout(() => speak(en, 'en'), 1200);
+                setTimeout(() => speak(en, 'en'), 1300);
             };
 
             useEffect(() => {
@@ -129,12 +181,75 @@
                 const mCanvas = maskCanvasRef.current;
                 const mCtx = mCanvas.getContext('2d');
                 mCtx.clearRect(0, 0, 200, 200);
-                mCtx.fill(new Path2D(currentLevel.path));
+                
+                const pathObj = new Path2D(currentLevel.path);
+                mCtx.fillStyle = '#000000';
+                mCtx.fill(pathObj);
 
                 setCoverage(0);
                 setIsCompleted(false);
                 speakBilingual(`請把${currentLevel.objectName.zh}塗上${currentLevel.colorName.zh}`, `Color the ${currentLevel.objectName.en} ${currentLevel.colorName.en}`);
             }, [levelIdx]);
+
+            const renderLevelDetails = (id) => {
+                switch(id) {
+                    case 1: // 蘋果果梗與綠葉
+                        return (
+                            <g fill="none" stroke="#2D3436" strokeWidth="2">
+                                <path d="M100,68 Q102,45 110,40" stroke="#795548" strokeWidth="4" strokeLinecap="round" />
+                                <path d="M104,48 Q125,35 130,50 Q115,55 104,48" fill="#4CAF50" stroke="#2D3436" strokeWidth="2" />
+                            </g>
+                        );
+                    case 2: // 樹葉內部葉脈
+                        return (
+                            <g fill="none" stroke="#2D3436" strokeWidth="2" opacity="0.4">
+                                <path d="M100,40 L100,185" />
+                                <path d="M100,70 L135,95 M100,100 L142,125 M100,130 L135,155" />
+                                <path d="M100,70 L65,95 M100,100 L58,125 M100,130 L65,155" />
+                            </g>
+                        );
+                    case 3: // 香蕉兩端果梗與微弱分界線
+                        return (
+                            <g fill="none" stroke="#2D3436" strokeWidth="2">
+                                <path d="M155,55 L163,47" stroke="#795548" strokeWidth="6" strokeLinecap="round" />
+                                <path d="M45,165 L40,168" stroke="#5D4037" strokeWidth="6" strokeLinecap="round" />
+                                <path d="M155,55 Q105,80 45,165" stroke="#2D3436" strokeWidth="1.5" strokeLinecap="round" opacity="0.25" />
+                            </g>
+                        );
+                    case 4: // 橘子葉片與果皮紋理點
+                        return (
+                            <g fill="none" stroke="#2D3436" strokeWidth="2">
+                                <circle cx="100" cy="55" r="2" fill="#2D3436" />
+                                <path d="M100,55 Q115,35 130,45 Q115,50 100,55" fill="#4CAF50" stroke="#2D3436" strokeWidth="2" />
+                                <circle cx="65" cy="100" r="1.5" fill="#2D3436" opacity="0.2" />
+                                <circle cx="75" cy="140" r="1.5" fill="#2D3436" opacity="0.2" />
+                                <circle cx="135" cy="110" r="1.5" fill="#2D3436" opacity="0.2" />
+                                <circle cx="125" cy="150" r="1.5" fill="#2D3436" opacity="0.2" />
+                            </g>
+                        );
+                    case 5: // 葡萄顆粒與立體高光（與新外框完美貼合）
+                        return (
+                            <g fill="none" stroke="#2D3436" strokeWidth="2">
+                                <path d="M100,75 C100,60 110,45 115,45" stroke="#795548" strokeWidth="3" strokeLinecap="round" />
+                                <path d="M100,65 Q90,60 90,50 T100,45" stroke="#4CAF50" strokeWidth="1.5" strokeLinecap="round" />
+                                <circle cx="80" cy="90" r="15" fill="none" stroke="#2D3436" strokeWidth="2.5" />
+                                <circle cx="100" cy="90" r="15" fill="none" stroke="#2D3436" strokeWidth="2.5" />
+                                <circle cx="120" cy="90" r="15" fill="none" stroke="#2D3436" strokeWidth="2.5" />
+                                <circle cx="90" cy="115" r="15" fill="none" stroke="#2D3436" strokeWidth="2.5" />
+                                <circle cx="110" cy="115" r="15" fill="none" stroke="#2D3436" strokeWidth="2.5" />
+                                <circle cx="100" cy="140" r="15" fill="none" stroke="#2D3436" strokeWidth="2.5" />
+                                <path d="M73,85 A5,5 0 0 1 78,80" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
+                                <path d="M93,85 A5,5 0 0 1 98,80" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
+                                <path d="M113,85 A5,5 0 0 1 118,80" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
+                                <path d="M83,110 A5,5 0 0 1 88,105" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
+                                <path d="M103,110 A5,5 0 0 1 108,105" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
+                                <path d="M93,135 A5,5 0 0 1 98,130" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
+                            </g>
+                        );
+                    default:
+                        return null;
+                }
+            };
 
             const getPos = (e) => {
                 const rect = canvasRef.current.getBoundingClientRect();
@@ -146,127 +261,201 @@
                 };
             };
 
+            const drawSegment = (x1, y1, x2, y2) => {
+                const ctx = ctxRef.current;
+                ctx.save();
+                ctx.clip(new Path2D(currentLevel.path));
+                ctx.globalAlpha = 0.55;
+                ctx.lineWidth = 26; 
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = selectedColor.code;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+                ctx.restore();
+            };
+
             const handleStart = (e) => {
                 if (isCompleted || !selectedColor) return;
                 if (selectedColor.code !== currentLevel.targetColor) {
-                    speakBilingual(`這不是${currentLevel.colorName.zh}`, `That's not ${currentLevel.colorName.en}`);
+                    speakBilingual(`這不是${currentLevel.colorName.zh}喔`, `That's not ${currentLevel.colorName.en}`);
                     return;
                 }
                 setIsDrawing(true);
-                ctxRef.current.beginPath();
+                const pos = getPos(e);
+                lastPos.current = pos;
+                drawSegment(pos.x, pos.y, pos.x, pos.y);
             };
 
             const handleMove = (e) => {
                 if (!isDrawing) return;
-                const { x, y } = getPos(e);
-                const ctx = ctxRef.current;
-                ctx.save();
-                ctx.clip(new Path2D(currentLevel.path));
-                ctx.globalAlpha = 0.4;
-                ctx.lineWidth = 30;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.strokeStyle = selectedColor.code;
-                ctx.lineTo(x, y);
-                ctx.stroke();
-                ctx.restore();
+                const pos = getPos(e);
+                drawSegment(lastPos.current.x, lastPos.current.y, pos.x, pos.y);
+                lastPos.current = pos;
             };
 
             const handleEnd = () => {
                 if (!isDrawing) return;
                 setIsDrawing(false);
+                
                 const drawData = ctxRef.current.getImageData(0,0,200,200).data;
                 const maskData = maskCanvasRef.current.getContext('2d').getImageData(0,0,200,200).data;
-                let total = 0, colored = 0;
-                for(let i=0; i<maskData.length; i+=4) {
-                    if(maskData[i+3] > 0) {
-                        total++;
-                        if(drawData[i+3] > 30) colored++;
+                let totalPixels = 0, coloredPixels = 0;
+                
+                for (let i = 0; i < maskData.length; i += 4) {
+                    if (maskData[i+3] > 0) { 
+                        totalPixels++;
+                        if (drawData[i+3] > 50) { 
+                            coloredPixels++;
+                        }
                     }
                 }
-                const res = (colored/total)*100;
-                setCoverage(res);
-                if(res > 80 && !isCompleted) {
+                
+                const percent = totalPixels > 0 ? (coloredPixels / totalPixels) * 100 : 0;
+                setCoverage(percent);
+                
+                if (percent >= 80 && !isCompleted) {
                     setIsCompleted(true);
-                    speakBilingual("好棒喔！你完成了！", "Wonderful! You finished it!");
+                    speakBilingual("哇！太棒了！你完成了！", "Wonderful! You finished it!");
                 }
             };
 
             return (
-                <div className="min-h-screen flex flex-col items-center p-4 font-sans">
+                <div className="min-h-screen flex flex-col items-center p-4 font-sans select-none touch-none">
                     <canvas ref={maskCanvasRef} width="200" height="200" className="hidden" />
                     
-                    <header className="w-full max-w-md flex justify-between items-center mb-6">
-                        <div className="flex items-center gap-2">
-                            <div className="bg-orange-500 p-2 rounded-xl text-white shadow-lg"><i data-lucide="palette"></i></div>
+                    <header className="w-full max-w-md flex justify-between items-center mb-5">
+                        <div className="flex items-center gap-2.5">
+                            <div className="bg-orange-500 p-2 rounded-xl text-white shadow-lg">
+                                <PaletteIcon />
+                            </div>
                             <div>
-                                <h1 className="font-black text-gray-800 text-lg">Bilingual Coloring</h1>
-                                <p className="text-[10px] text-orange-500 font-bold uppercase tracking-tighter">Learning Fruits</p>
+                                <h1 className="font-black text-gray-800 text-lg">{lang === 'zh' ? '雙語著色大師' : 'Bilingual Coloring'}</h1>
+                                <p className="text-[10px] text-orange-500 font-bold uppercase tracking-widest">Fruits Garden</p>
                             </div>
                         </div>
-                        <button onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} className="bg-white px-4 py-1.5 rounded-full text-sm font-bold shadow-md border-2 border-orange-100 hover:bg-orange-50 active:scale-95 transition-all">
+                        <button 
+                            onClick={() => {
+                                const nextLang = lang === 'zh' ? 'en' : 'zh';
+                                setLang(nextLang);
+                                speak(nextLang === 'zh' ? '中文' : 'English', nextLang);
+                            }} 
+                            className="bg-white px-4 py-1.5 rounded-full text-sm font-bold shadow-md border-2 border-orange-100 hover:bg-orange-50 active:scale-95 transition-all flex items-center gap-1 text-gray-700"
+                        >
+                            <LanguagesIcon />
                             {lang === 'zh' ? 'English' : '中文'}
                         </button>
                     </header>
 
-                    <div className="text-center mb-6">
-                        <div className="inline-block bg-white px-6 py-2 rounded-2xl shadow-md mb-3 border-2 border-white">
-                            <h2 className="text-2xl font-black text-gray-800">
+                    <div className="text-center mb-5">
+                        <div className="inline-flex items-center bg-white px-5 py-2 rounded-2xl shadow-sm mb-3 border border-orange-100 gap-2">
+                            <h2 className="text-xl md:text-2xl font-black text-gray-800">
                                 {lang === 'zh' ? `請塗上 ${currentLevel.colorName.zh}` : `Color it ${currentLevel.colorName.en}`}
                             </h2>
+                            <button 
+                                onClick={() => speakBilingual(currentLevel.colorName.zh, currentLevel.colorName.en)} 
+                                className="text-orange-400 hover:scale-110 active:scale-95 transition-transform"
+                            >
+                                <VolumeIcon />
+                            </button>
                         </div>
+                        
                         <div className="flex items-center gap-3 justify-center text-gray-500 font-bold">
-                            <span className="text-sm">{lang === 'zh' ? '進度' : 'Progress'}</span>
-                            <div className="w-40 h-3 bg-gray-200 rounded-full overflow-hidden border border-gray-300">
+                            <span className="text-xs">{lang === 'zh' ? '塗色進度' : 'Progress'}</span>
+                            <div className="w-44 h-3.5 bg-gray-200 rounded-full overflow-hidden border border-gray-300">
                                 <div className="h-full bg-green-400 transition-all duration-300" style={{width: `${Math.min(100, (coverage/80)*100)}%`}}></div>
                             </div>
-                            <span className={`text-sm ${coverage >= 80 ? 'text-green-500' : ''}`}>{Math.round(Math.min(100, (coverage/80)*100))}%</span>
+                            <span className={`text-xs ${coverage >= 80 ? 'text-green-500 font-black' : ''}`}>{Math.round(Math.min(100, (coverage/80)*100))}%</span>
                         </div>
                     </div>
 
-                    <div className="relative w-full max-w-sm aspect-square bg-white rounded-[50px] shadow-2xl border-[12px] border-white overflow-hidden mb-8">
+                    <div className="relative w-full max-w-sm aspect-square bg-white rounded-[45px] shadow-2xl border-[10px] border-white overflow-hidden mb-6 p-8">
                         <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#000 1.5px, transparent 1.5px), linear-gradient(90deg, #000 1.5px, transparent 1.5px)', backgroundSize: '25px 25px' }} />
                         
-                        <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full p-8 pointer-events-none">
-                            <path d={currentLevel.path} fill="#fcfcfc" stroke="#eee" strokeWidth="1" />
-                        </svg>
-                        
-                        <canvas 
-                            ref={canvasRef} width="200" height="200" 
-                            onMouseDown={handleStart} onMouseMove={handleMove} onMouseUp={handleEnd} onMouseLeave={handleEnd}
-                            onTouchStart={handleStart} onTouchMove={handleMove} onTouchEnd={handleEnd}
-                            className="absolute inset-0 w-full h-full p-8 z-10 cursor-crosshair"
-                        />
-                        
-                        <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full p-8 pointer-events-none z-20">
-                            <path d={currentLevel.path} fill="none" stroke="#2D3436" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                            {currentLevel.details}
-                        </svg>
+                        <div className="relative w-full h-full">
+                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none">
+                                <path d={currentLevel.path} fill="#FAFAFA" stroke="#EAEAEA" strokeWidth="1" />
+                            </svg>
+                            
+                            <canvas 
+                                ref={canvasRef} 
+                                width="200" 
+                                height="200" 
+                                onMouseDown={handleStart} 
+                                onMouseMove={handleMove} 
+                                onMouseUp={handleEnd} 
+                                onMouseLeave={handleEnd}
+                                onTouchStart={handleStart} 
+                                onTouchMove={handleMove} 
+                                onTouchEnd={handleEnd}
+                                className="absolute inset-0 w-full h-full z-10 cursor-crosshair"
+                            />
+                            
+                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none z-20">
+                                <path d={currentLevel.path} fill="none" stroke="#2D3436" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                                {renderLevelDetails(currentLevel.id)}
+                            </svg>
+                        </div>
 
                         {isCompleted && (
-                            <div className="absolute inset-0 z-30 bg-white/70 backdrop-blur-sm flex items-center justify-center animate-fade-in text-center">
-                                <div className="animate-pop-in bg-white p-8 rounded-[40px] shadow-2xl border-4 border-green-400">
-                                    <div className="text-4xl mb-2 text-yellow-400 font-black">★★★</div>
-                                    <p className="text-2xl font-black text-green-600 mb-1">{lang === 'zh' ? '太棒了！' : 'EXCELLENT!'}</p>
-                                    <p className="text-sm text-gray-500 font-bold mb-6">{lang === 'zh' ? `這是一個${currentLevel.objectName.zh}` : `This is an ${currentLevel.objectName.en}`}</p>
-                                    <button onClick={() => setLevelIdx((levelIdx+1)%LEVELS.length)} className="bg-green-500 text-white px-10 py-3 rounded-2xl font-black shadow-lg hover:bg-green-600 active:scale-95 transition-all">
+                            <div className="absolute inset-0 z-30 bg-white/75 backdrop-blur-sm flex items-center justify-center animate-fade-in text-center p-4">
+                                <div className="animate-pop-in bg-white p-7 rounded-[35px] shadow-2xl border-4 border-green-400 max-w-[280px] w-full">
+                                    <div className="text-3xl mb-1 text-yellow-400 flex justify-center gap-1">
+                                        <StarIcon fill="currentColor" />
+                                        <div className="animate-bounce"><StarIcon fill="currentColor" /></div>
+                                        <StarIcon fill="currentColor" />
+                                    </div>
+                                    <p className="text-2xl font-black text-green-600 mb-0.5">{lang === 'zh' ? '太厲害了！' : 'EXCELLENT!'}</p>
+                                    <p className="text-xs text-gray-500 font-bold mb-5 leading-relaxed">
+                                        {lang === 'zh' ? `這是一個${currentLevel.colorName.zh}的${currentLevel.objectName.zh}` : `This is a ${currentLevel.colorName.en} ${currentLevel.objectName.en}`}
+                                    </p>
+                                    <button 
+                                        onClick={() => setLevelIdx((levelIdx + 1) % LEVELS.length)} 
+                                        className="bg-green-500 text-white px-8 py-2.5 rounded-xl font-black shadow-lg hover:bg-green-600 active:scale-95 transition-all flex items-center justify-center gap-1 mx-auto w-full"
+                                    >
                                         {lang === 'zh' ? '下一關' : 'Next'}
+                                        <ChevronRightIcon />
                                     </button>
                                 </div>
+                                <Confetti />
                             </div>
                         )}
                     </div>
 
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-4 bg-white/80 backdrop-blur-md p-6 rounded-[35px] shadow-xl border border-white max-w-lg w-full">
+                    <div className="grid grid-cols-3 sm:grid-cols-7 gap-4 bg-white/95 backdrop-blur-md p-5 rounded-[32px] shadow-xl border border-white max-w-lg w-full">
                         {COLORS.map(c => (
-                            <button key={c.code} onClick={() => { setSelectedColor(c); speakBilingual(c.zh, c.en); }}
-                                className={`flex flex-col items-center transition-all duration-300 ${selectedColor?.code === c.code ? 'scale-110 -translate-y-3' : 'opacity-60 hover:opacity-100'}`}>
-                                <div className={`w-10 h-16 rounded-t-lg rounded-b-xl border-4 ${selectedColor?.code === c.code ? 'border-orange-300' : 'border-white'} shadow-md`} style={{backgroundColor: c.code}}>
-                                    <div className="w-full h-6 bg-black/5 mt-4" />
+                            <button 
+                                key={c.code} 
+                                onClick={() => { 
+                                    setSelectedColor(c); 
+                                    speakBilingual(c.zh, c.en); 
+                                }}
+                                className={`flex flex-col items-center transition-all duration-300 ${selectedColor?.code === c.code ? 'scale-110 -translate-y-2' : 'opacity-65 hover:opacity-100'}`}
+                            >
+                                <div className={`w-9 h-14 rounded-t-lg rounded-b-xl border-4 ${selectedColor?.code === c.code ? 'border-orange-300' : 'border-white'} shadow-md`} style={{backgroundColor: c.code}}>
+                                    <div className="w-full h-5 bg-black/5 mt-3" />
                                 </div>
-                                <span className="text-[10px] font-black mt-2 text-gray-500 uppercase">{lang === 'zh' ? c.zh : c.en}</span>
+                                <span className="text-[10px] font-black mt-1.5 text-gray-500">{lang === 'zh' ? c.zh : c.en}</span>
                             </button>
                         ))}
+                        
+                        <button 
+                            onClick={() => { 
+                                const ctx = ctxRef.current;
+                                ctx.clearRect(0, 0, 200, 200);
+                                setCoverage(0);
+                                setIsCompleted(false);
+                                speakBilingual('重來一次', 'Try again');
+                            }}
+                            className="flex flex-col items-center justify-center text-gray-400 hover:text-red-500 active:scale-90 transition-all"
+                        >
+                            <div className="w-9 h-14 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center mb-1">
+                                <RotateCcwIcon />
+                            </div>
+                            <span className="text-[9px] font-black">RESET</span>
+                        </button>
                     </div>
                 </div>
             );
@@ -274,8 +463,6 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
-        
-        setTimeout(() => lucide.createIcons(), 500);
     </script>
 </body>
 </html>
