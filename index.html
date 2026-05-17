@@ -143,21 +143,21 @@
                 mCtx.fill(pathObj);
             };
 
+            // 核心機制大修正：只要 levelIdx 改變，就強制重新初始化畫布、清空狀態，保證 100% 成功換關
             useEffect(() => {
                 initCanvas();
                 setCoverage(0);
                 setIsCompleted(false);
                 setSelectedColor(null); 
-                speakQuestion();
+                // 給瀏覽器一點時間渲染 DOM 後再播放提問語音
+                setTimeout(() => {
+                    speakQuestion();
+                }, 100);
             }, [levelIdx]);
 
-            // 下一關卡切換（修正：加入完整的狀態重設與同步刷新）
+            // 點擊「下一關」按鈕的函數
             const handleNextLevel = () => {
-                const nextIdx = (levelIdx + 1) % LEVELS.length;
-                setIsCompleted(false);
-                setCoverage(0);
-                setSelectedColor(null);
-                setLevelIdx(nextIdx); 
+                setLevelIdx((prevIdx) => (prevIdx + 1) % LEVELS.length);
             };
 
             const renderLevelDetails = (id) => {
@@ -303,7 +303,7 @@
             return (
                 <div className="min-h-screen flex flex-col items-center p-6 font-sans select-none touch-none max-w-xl mx-auto">
                     
-                    {/* 隱藏用遮罩畫布 */}
+                    {/* 計算用隱藏畫布 */}
                     <canvas ref={maskCanvasRef} width="200" height="200" className="hidden" />
 
                     {/* 頂部導覽列 */}
@@ -311,17 +311,14 @@
                         <h1 className="font-bold text-2xl tracking-wider">🎨 雙語互動繪本 - 水果樂園</h1>
                     </header>
 
-                    {/* 大問句提示區 (修正：一行國字、一行注音、一行英文，完美清爽分行) */}
+                    {/* 大問句提示區 (三分行清爽排版) */}
                     <div className="w-full bg-white px-6 py-4 rounded-[32px] shadow-sm mb-6 border-2 border-orange-100 text-center relative flex flex-col justify-center items-center">
-                        {/* 第一行：大國字 */}
                         <h2 className="text-3xl font-black text-gray-800 tracking-wider">
                             {currentLevel.objectName.zh}是什麼顏色的呢？
                         </h2>
-                        {/* 第二行：獨立注音行 (絕不與國字堆疊打架) */}
                         <p className="text-base font-bold text-orange-500 tracking-widest mt-1 mb-1">
                             {currentLevel.questionBpmf}
                         </p>
-                        {/* 第三行：英文字幕 */}
                         <p className="font-en-storybook text-lg font-medium text-gray-400 italic">
                             What color is the {currentLevel.objectName.en}?
                         </p>
@@ -360,14 +357,14 @@
                                 style={{ zIndex: 10 }}
                             />
                             
-                            {/* 第三層：蓋在最上層的藝術黑線 */}
+                            {/* 第三層：最上層不變之黑色粗線與裝飾墨線 */}
                             <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 20 }}>
                                 <path d={currentLevel.path} fill="none" stroke="#2D3436" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                                 {renderLevelDetails(currentLevel.id)}
                             </svg>
                         </div>
 
-                        {/* 過關彈窗 (修正：點擊「下一關」能 100% 順暢跳關) */}
+                        {/* 過關彈窗 (修正：點擊能 100% 機制正常跳下一關) */}
                         {isCompleted && (
                             <div className="absolute inset-0 z-30 bg-white/85 backdrop-blur-sm flex items-center justify-center animate-fade-in text-center p-4">
                                 <div className="animate-pop-in bg-white p-6 rounded-[35px] shadow-2xl border-4 border-green-400 max-w-[300px] w-full">
@@ -376,7 +373,6 @@
                                     </div>
                                     <p className="text-3xl font-black text-green-600 mb-2">太厲害了！</p>
                                     
-                                    {/* 三層分行反饋 */}
                                     <p className="text-2xl text-gray-800 font-black">
                                         這是{selectedColor?.zh}的{currentLevel.objectName.zh}
                                     </p>
@@ -399,7 +395,7 @@
                         )}
                     </div>
 
-                    {/* 水果文字提示名牌 (修正：置於畫布正下方，並採用乾淨的三分行設計) */}
+                    {/* 水果文字提示名牌 (置於畫布正下方) */}
                     <div className="w-full bg-orange-100/70 border-2 border-dashed border-orange-300 rounded-3xl p-4 text-center mb-6 shadow-inner">
                         <div className="text-3xl font-black text-orange-900 flex items-center justify-center gap-2">
                             <span>{currentLevel.emoji}</span>
