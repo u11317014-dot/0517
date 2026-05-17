@@ -28,45 +28,51 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- 純資料設定 (優化後的精確水果輪廓 Path，保證完美顯色) ---
+        // --- 純資料設定 (修正：幾何置中與葡萄純圓圈路徑) ---
         const LEVELS = [
             { 
                 id: 1, 
                 targetColor: '#FF3D00', 
                 colorName: { zh: '紅色', en: 'Red' }, 
                 objectName: { zh: '蘋果', en: 'Apple' }, 
-                path: "M100,60 C80,55 40,60 40,110 C40,155 75,175 100,165 C125,175 160,155 160,110 C160,60 120,55 100,60 Z"
+                // 修正：置中的蘋果幾何形狀
+                path: "M100,68 C80,63 45,68 45,115 C45,155 75,175 100,168 C125,175 155,155 155,115 C155,68 120,63 100,68 Z"
             },
             { 
                 id: 2, 
                 targetColor: '#4CAF50', 
                 colorName: { zh: '綠色', en: 'Green' }, 
                 objectName: { zh: '樹葉', en: 'Leaf' }, 
-                path: "M100,35 C50,75 45,145 100,185 C155,145 150,75 100,35 Z"
+                // 修正：置中的流暢葉片幾何形狀
+                path: "M100,40 C55,75 50,145 100,185 C150,145 145,75 100,40 Z"
             },
             { 
                 id: 3, 
                 targetColor: '#FFD600', 
                 colorName: { zh: '黃色', en: 'Yellow' }, 
                 objectName: { zh: '香蕉', en: 'Banana' }, 
-                path: "M160,45 C120,50 50,85 40,165 C65,165 125,115 160,45 Z"
+                // 修正：置中的月牙香蕉幾何形狀
+                path: "M155,55 C120,55 55,90 45,165 C68,165 125,120 155,55 Z"
             },
             { 
                 id: 4, 
                 targetColor: '#FF9800', 
                 colorName: { zh: '橘色', en: 'Orange' }, 
                 objectName: { zh: '橘子', en: 'Orange' }, 
-                path: "M100,50 C145,50 175,80 175,122 C175,165 145,192 100,192 C55,192 25,165 25,122 C25,80 55,50 100,50 Z"
+                // 修正：置中的圓形柑橘幾何形狀
+                path: "M100,55 C145,55 175,83 175,125 C175,167 145,195 100,195 C55,195 25,167 25,125 C25,83 55,55 100,55 Z"
             },
             { 
                 id: 5, 
                 targetColor: '#9C27B0', 
                 colorName: { zh: '紫色', en: 'Purple' }, 
                 objectName: { zh: '葡萄', en: 'Grapes' }, 
-                path: "M80,75 C90,75 110,75 120,75 C132,75 135,85 135,100 C135,110 128,115 125,120 C125,122 122,126 115,130 C115,133 112,143 100,155 C88,143 85,133 85,130 C78,126 75,122 75,120 C72,115 65,110 65,100 C65,85 68,75 80,75 Z"
+                // 修正核心：移除多餘塑形，直接用 6 個置中的圓圈（半徑 15）組成路徑
+                path: "M80,90 A15,15 0 1,0 80,90 M100,90 A15,15 0 1,0 100,90 M120,90 A15,15 0 1,0 120,90 M90,115 A15,15 0 1,0 90,115 M110,115 A15,15 0 1,0 110,115 M100,140 A15,15 0 1,0 100,140"
             }
         ];
 
+        // 適合幼兒的亮麗彩色筆設定
         const COLORS = [
             { zh: '紅色', en: 'Red', code: '#FF3D00' },
             { zh: '黃色', en: 'Yellow', code: '#FFD600' },
@@ -76,7 +82,7 @@
             { zh: '紫色', en: 'Purple', code: '#9C27B0' }
         ];
 
-        // --- SVG 圖標元件 ---
+        // --- 純 React SVG 圖標元件 ---
         const PaletteIcon = () => (
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.03456 19.176 5.09705 19.435 5.01633 19.6773C4.85691 20.1557 4.77 20.6678 4.77 21.2C4.77 21.6418 5.12817 22 5.57 22H12Z" />
@@ -118,6 +124,7 @@
             </svg>
         );
 
+        // --- 慶祝碎紙花特效 ---
         const Confetti = () => {
             return Array.from({ length: 30 }).map((_, i) => (
                 <div 
@@ -134,6 +141,7 @@
             ));
         };
 
+        // --- 主應用元件 ---
         const App = () => {
             const [levelIdx, setLevelIdx] = useState(0);
             const [lang, setLang] = useState('zh');
@@ -148,6 +156,7 @@
             const lastPos = useRef({ x: 0, y: 0 });
             const currentLevel = LEVELS[levelIdx];
 
+            // 系統雙語語音功能
             const speak = (text, language) => {
                 if ('speechSynthesis' in window) {
                     window.speechSynthesis.cancel();
@@ -163,6 +172,7 @@
                 setTimeout(() => speak(en, 'en'), 1300);
             };
 
+            // 關卡切換初始化
             useEffect(() => {
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
@@ -173,6 +183,7 @@
                 const mCtx = mCanvas.getContext('2d');
                 mCtx.clearRect(0, 0, 200, 200);
                 
+                // 於隱藏計算畫布中填滿該關卡形狀
                 const pathObj = new Path2D(currentLevel.path);
                 mCtx.fillStyle = '#000000';
                 mCtx.fill(pathObj);
@@ -182,53 +193,49 @@
                 speakBilingual(`請把${currentLevel.objectName.zh}塗上${currentLevel.colorName.zh}`, `Color the ${currentLevel.objectName.en} ${currentLevel.colorName.en}`);
             }, [levelIdx]);
 
+            // 在最上層黑框之上的水果藝術墨線與細節
             const renderLevelDetails = (id) => {
                 switch(id) {
-                    case 1: 
+                    case 1: // 蘋果果梗與綠葉
                         return (
                             <g fill="none" stroke="#2D3436" strokeWidth="2">
-                                <path d="M100,60 Q102,40 110,35" stroke="#795548" strokeWidth="4" strokeLinecap="round" />
-                                <path d="M104,45 Q125,32 130,47 Q115,52 104,45" fill="#4CAF50" stroke="#2D3436" strokeWidth="2" />
+                                <path d="M100,68 Q102,45 110,40" stroke="#795548" strokeWidth="4" strokeLinecap="round" />
+                                <path d="M104,48 Q125,35 130,50 Q115,55 104,48" fill="#4CAF50" stroke="#2D3436" strokeWidth="2" />
                             </g>
                         );
-                    case 2: 
+                    case 2: // 樹葉內部葉脈
                         return (
                             <g fill="none" stroke="#2D3436" strokeWidth="2" opacity="0.4">
-                                <path d="M100,35 L100,185" />
+                                <path d="M100,40 L100,185" />
                                 <path d="M100,70 L135,95 M100,100 L142,125 M100,130 L135,155" />
                                 <path d="M100,70 L65,95 M100,100 L58,125 M100,130 L65,155" />
                             </g>
                         );
-                    case 3: 
+                    case 3: // 香蕉兩端果梗
                         return (
                             <g fill="none" stroke="#2D3436" strokeWidth="2">
-                                <path d="M160,45 L168,37" stroke="#795548" strokeWidth="6" strokeLinecap="round" />
-                                <path d="M40,165 L35,168" stroke="#5D4037" strokeWidth="6" strokeLinecap="round" />
-                                <path d="M160,45 Q110,75 40,165" stroke="#2D3436" strokeWidth="1.5" strokeLinecap="round" opacity="0.25" />
+                                <path d="M155,55 L163,47" stroke="#795548" strokeWidth="6" strokeLinecap="round" />
+                                <path d="M45,165 L40,168" stroke="#5D4037" strokeWidth="6" strokeLinecap="round" />
+                                <path d="M155,55 Q105,80 45,165" stroke="#2D3436" strokeWidth="1.5" strokeLinecap="round" opacity="0.25" />
                             </g>
                         );
-                    case 4: 
+                    case 4: // 橘子葉片與果皮紋理點
                         return (
                             <g fill="none" stroke="#2D3436" strokeWidth="2">
-                                <circle cx="100" cy="50" r="2" fill="#2D3436" />
-                                <path d="M100,50 Q115,30 130,40 Q115,45 100,50" fill="#4CAF50" stroke="#2D3436" strokeWidth="2" />
+                                <circle cx="100" cy="55" r="2" fill="#2D3436" />
+                                <path d="M100,55 Q115,35 130,45 Q115,50 100,55" fill="#4CAF50" stroke="#2D3436" strokeWidth="2" />
                                 <circle cx="65" cy="100" r="1.5" fill="#2D3436" opacity="0.2" />
                                 <circle cx="75" cy="140" r="1.5" fill="#2D3436" opacity="0.2" />
                                 <circle cx="135" cy="110" r="1.5" fill="#2D3436" opacity="0.2" />
                                 <circle cx="125" cy="150" r="1.5" fill="#2D3436" opacity="0.2" />
                             </g>
                         );
-                    case 5: 
+                    case 5: // 葡萄顆粒反光與藤梗（修正：無多餘塑形外框）
                         return (
                             <g fill="none" stroke="#2D3436" strokeWidth="2">
                                 <path d="M100,75 C100,60 110,45 115,45" stroke="#795548" strokeWidth="3" strokeLinecap="round" />
                                 <path d="M100,65 Q90,60 90,50 T100,45" stroke="#4CAF50" strokeWidth="1.5" strokeLinecap="round" />
-                                <circle cx="80" cy="90" r="15" fill="none" stroke="#2D3436" strokeWidth="2.5" />
-                                <circle cx="100" cy="90" r="15" fill="none" stroke="#2D3436" strokeWidth="2.5" />
-                                <circle cx="120" cy="90" r="15" fill="none" stroke="#2D3436" strokeWidth="2.5" />
-                                <circle cx="90" cy="115" r="15" fill="none" stroke="#2D3436" strokeWidth="2.5" />
-                                <circle cx="110" cy="115" r="15" fill="none" stroke="#2D3436" strokeWidth="2.5" />
-                                <circle cx="100" cy="140" r="15" fill="none" stroke="#2D3436" strokeWidth="2.5" />
+                                {/* 白反光高光 */}
                                 <path d="M73,85 A5,5 0 0 1 78,80" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
                                 <path d="M93,85 A5,5 0 0 1 98,80" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
                                 <path d="M113,85 A5,5 0 0 1 118,80" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.8" />
@@ -242,6 +249,7 @@
                 }
             };
 
+            // 精確獲取畫布上的相對點位
             const getPos = (e) => {
                 const rect = canvasRef.current.getBoundingClientRect();
                 const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -255,6 +263,7 @@
             const drawSegment = (x1, y1, x2, y2) => {
                 const ctx = ctxRef.current;
                 ctx.save();
+                // 核心優化：使用 Path2D 作為畫布剪裁區域，確保顏色無法塗出黑框內
                 ctx.clip(new Path2D(currentLevel.path));
                 ctx.globalAlpha = 0.55;
                 ctx.lineWidth = 26; 
@@ -291,14 +300,15 @@
                 if (!isDrawing) return;
                 setIsDrawing(false);
                 
+                // 比對玩家在 Canvas 上著色與 Mask 遮罩的重合比例
                 const drawData = ctxRef.current.getImageData(0,0,200,200).data;
                 const maskData = maskCanvasRef.current.getContext('2d').getImageData(0,0,200,200).data;
                 let totalPixels = 0, coloredPixels = 0;
                 
                 for (let i = 0; i < maskData.length; i += 4) {
-                    if (maskData[i+3] > 0) { 
+                    if (maskData[i+3] > 0) { // 在圖案內部
                         totalPixels++;
-                        if (drawData[i+3] > 50) { 
+                        if (drawData[i+3] > 50) { // 已塗色 (透明度 > 50)
                             coloredPixels++;
                         }
                     }
@@ -315,6 +325,7 @@
 
             return (
                 <div className="min-h-screen flex flex-col items-center p-4 font-sans select-none touch-none">
+                    {/* 隱藏的計算進度專用 Canvas */}
                     <canvas ref={maskCanvasRef} width="200" height="200" className="hidden" />
                     
                     {/* 標題欄 */}
@@ -341,7 +352,7 @@
                         </button>
                     </header>
 
-                    {/* 提示與進度條 */}
+                    {/* 指令提示與進度條 */}
                     <div className="text-center mb-5">
                         <div className="inline-flex items-center bg-white px-5 py-2 rounded-2xl shadow-sm mb-3 border border-orange-100 gap-2">
                             <h2 className="text-xl md:text-2xl font-black text-gray-800">
@@ -364,18 +375,18 @@
                         </div>
                     </div>
 
-                    {/* 修正後的畫布核心區（確保圖層不重疊、水果完美顯現） */}
+                    {/* 畫布核心區 */}
                     <div className="relative w-full max-w-sm aspect-square bg-white rounded-[45px] shadow-2xl border-[10px] border-white overflow-hidden mb-6 p-8">
-                        {/* 背景方格紋理 */}
-                        <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#000 1.5px, transparent 1.5px), linear-gradient(90deg, #000 1.5px, transparent 1.5px)', backgroundSize: '25px 25px', zIndex: 1 }} />
+                        {/* 繪畫背景方格微弱紋理 */}
+                        <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#000 1.5px, transparent 1.5px), linear-gradient(90deg, #000 1.5px, transparent 1.5px)', backgroundSize: '25px 25px' }} />
                         
                         <div className="relative w-full h-full">
-                            {/* 底層：灰色淡線提示 */}
-                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 2 }}>
-                                <path d={currentLevel.path} fill="#FAFAFA" stroke="#DCDCDC" strokeWidth="2" />
+                            {/* 第一層：水果底色淡色提示線 */}
+                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none">
+                                <path d={currentLevel.path} fill="#FAFAFA" stroke="#EAEAEA" strokeWidth="1" />
                             </svg>
                             
-                            {/* 中層：互動繪畫 Canvas */}
+                            {/* 第二層：互動繪畫主畫布 */}
                             <canvas 
                                 ref={canvasRef} 
                                 width="200" 
@@ -387,20 +398,19 @@
                                 onTouchStart={handleStart} 
                                 onTouchMove={handleMove} 
                                 onTouchEnd={handleEnd}
-                                className="absolute inset-0 w-full h-full cursor-crosshair"
-                                style={{ zIndex: 3 }}
+                                className="absolute inset-0 w-full h-full z-10 cursor-crosshair"
                             />
                             
-                            {/* 頂層：藝術黑色邊框與水果細節細線 */}
-                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 4 }}>
+                            {/* 第三層：蓋在最上層的藝術黑色邊框與裝飾墨線（修正：葡萄為純圓圈框） */}
+                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none z-20">
                                 <path d={currentLevel.path} fill="none" stroke="#2D3436" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                                 {renderLevelDetails(currentLevel.id)}
                             </svg>
                         </div>
 
-                        {/* 過關彈窗 */}
+                        {/* 過關彈跳視窗 */}
                         {isCompleted && (
-                            <div className="absolute inset-0 z-50 bg-white/75 backdrop-blur-sm flex items-center justify-center animate-fade-in text-center p-4">
+                            <div className="absolute inset-0 z-30 bg-white/75 backdrop-blur-sm flex items-center justify-center animate-fade-in text-center p-4">
                                 <div className="animate-pop-in bg-white p-7 rounded-[35px] shadow-2xl border-4 border-green-400 max-w-[280px] w-full">
                                     <div className="text-3xl mb-1 text-yellow-400 flex justify-center gap-1">
                                         <StarIcon fill="currentColor" />
@@ -424,7 +434,7 @@
                         )}
                     </div>
 
-                    {/* 色票區與功能鈕 */}
+                    {/* 下方彩色調色盤與 Reset 控制鍵 */}
                     <div className="grid grid-cols-3 sm:grid-cols-7 gap-4 bg-white/95 backdrop-blur-md p-5 rounded-[32px] shadow-xl border border-white max-w-lg w-full">
                         {COLORS.map(c => (
                             <button 
@@ -442,6 +452,7 @@
                             </button>
                         ))}
                         
+                        {/* 重來重播鍵 */}
                         <button 
                             onClick={() => { 
                                 const ctx = ctxRef.current;
