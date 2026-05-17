@@ -24,7 +24,9 @@
         .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
         .animate-pop-in { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         .animate-confetti { animation: confettiFall 3s linear infinite; position: absolute; }
-        canvas { touch-action: none; }
+        
+        /* 避免行動裝置手勢干擾，但保留按鈕的可點擊性 */
+        .drawing-area { touch-action: none; }
         body { -webkit-tap-highlight-color: transparent; }
     </style>
 </head>
@@ -34,45 +36,45 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- 純資料設定 (分行幾何化：國字、注音、英文獨立隔離) ---
+        // --- 純資料設定 ---
         const LEVELS = [
             { 
                 id: 1, 
                 targetColors: ['#FF3D00', '#4CAF50'], 
-                objectName: { zh: '蘋果', bpmf: 'ㄆㄧㄥˊ ㄍㄨㄛˇ', en: 'Apple' }, 
-                questionBpmf: 'ㄆㄧㄥˊ ㄍㄨㄛˇ ㄕˋ ㄕㄣˊ ㄇㄜ˙ ㄧㄢˊ ㄙㄜˋ ㄉㄜ˙ ㄋㄜ˙',
+                objectName: { zh: '蘋果', bpmf: '...ㄆㄧㄥˊ...ㄍㄨㄛˇ...', en: 'Apple' }, 
+                questionBpmf: '...ㄆㄧㄥˊ...ㄍㄨㄛˇ...ㄕˋ...ㄕㄣˊ...ㄇㄜ˙...ㄧㄢˊ...ㄙㄜˋ...ㄉㄜ˙...ㄋㄜ˙...',
                 emoji: '🍎',
                 path: "M 100,65 C 75,60 45,65 45,112 C 45,152 75,172 100,163 C 125,172 155,152 155,112 C 155,65 125,60 100,65 Z"
             },
             { 
                 id: 2, 
                 targetColors: ['#4CAF50'], 
-                objectName: { zh: '樹葉', bpmf: 'ㄕㄨˋ ㄧㄝˋ', en: 'Leaf' }, 
-                questionBpmf: 'ㄕㄨˋ ㄧㄝˋ ㄕˋ ㄕㄣˊ ㄇㄜ˙ ㄧㄢˊ ㄙㄜˋ ㄉㄜ˙ ㄋㄜ˙',
+                objectName: { zh: '樹葉', bpmf: '...ㄕㄨˋ...ㄧㄝˋ...', en: 'Leaf' }, 
+                questionBpmf: '...ㄕㄨˋ...ㄧㄝˋ...ㄕˋ...ㄕㄣˊ...ㄇㄜ˙...ㄧㄢˊ...ㄙㄜˋ...ㄉㄜ˙...ㄋㄜ˙...',
                 emoji: '🌿',
                 path: "M 100,35 C 55,72 50,142 100,182 C 150,142 145,72 100,35 Z"
             },
             { 
                 id: 3, 
                 targetColors: ['#FFD600'], 
-                objectName: { zh: '香蕉', bpmf: 'ㄒㄧㄤ ㄐㄧㄠ', en: 'Banana' }, 
-                questionBpmf: 'ㄒㄧㄤ ㄐㄧㄠ ㄕˋ ㄕㄣˊ ㄇㄜ˙ ㄧㄢˊ ㄙㄜˋ ㄉㄜ˙ ㄋㄜ˙',
+                objectName: { zh: '香蕉', bpmf: '...ㄒㄧㄤ...ㄐㄧㄠ...', en: 'Banana' }, 
+                questionBpmf: '...ㄒㄧㄤ...ㄐㄧㄠ...ㄕˋ...ㄕㄣˊ...ㄇㄜ˙...ㄧㄢˊ...ㄙㄜˋ...ㄉㄜ˙...ㄋㄜ˙...',
                 emoji: '🍌',
                 path: "M 152,58 C 120,58 60,90 50,162 C 72,162 125,120 152,58 Z"
             },
             { 
                 id: 4, 
                 targetColors: ['#FF9800'], 
-                objectName: { zh: '橘子', bpmf: 'ㄐㄩˊ ㄗ˙', en: 'Orange' }, 
-                questionBpmf: 'ㄐㄩˊ ㄗ˙ ㄕˋ ㄕㄣˊ ㄇㄜ˙ ㄧˊ ㄙㄜˋ ㄉㄜ˙ ㄋㄜ˙',
+                objectName: { zh: '橘子', bpmf: '...ㄐㄩˊ...ㄗ˙...', en: 'Orange' }, 
+                questionBpmf: '...ㄐㄩˊ...ㄗ˙...ㄕˋ...ㄕㄣˊ...ㄇㄜ˙...ㄧˊ...ㄙㄜˋ...ㄉㄜ˙...ㄋㄜ˙...',
                 emoji: '🍊',
                 path: "M 100,55 C 142,55 170,83 170,122 C 170,162 142,190 100,190 C 58,190 30,162 30,122 C 30,83 58,55 100,55 Z"
             },
             { 
                 id: 5, 
                 targetColors: ['#9C27B0', '#4CAF50'], 
-                objectName: { zh: '葡萄', bpmf: 'ㄆㄨˊ ㄊㄠˊ', en: 'Grapes' }, 
-                questionBpmf: 'ㄆㄨˊ ㄊㄠˊ ㄕˋ ㄕㄣˊ ㄇㄜ˙ ㄧㄢˊ ㄙㄜˋ ㄉㄜ˙ ㄋㄜ˙',
+                objectName: { zh: '葡萄', bpmf: '...ㄆㄨˊ...ㄊㄠˊ...', en: 'Grapes' }, 
+                questionBpmf: '...ㄆㄨˊ...ㄊㄠˊ...ㄕˋ...ㄕㄣˊ...ㄇㄜ˙...ㄧㄢˊ...ㄙㄜˋ...ㄉㄜ˙...ㄋㄜ˙...',
                 emoji: '🍇',
                 path: "M 80,90 A 15,15 0 1,1 80,89.9 Z M 100,90 A 15,15 0 1,1 100,89.9 Z M 120,90 A 15,15 0 1,1 120,89.9 Z M 90,115 A 15,15 0 1,1 90,114.9 Z M 110,115 A 15,15 0 1,1 110,114.9 Z M 100,140 A 15,15 0 1,1 100,139.9 Z"
             }
@@ -100,11 +102,10 @@
             const lastPos = useRef({ x: 0, y: 0 });
             const currentLevel = LEVELS[levelIdx];
 
-            // 語音播放系統
+            // 語音系統
             const speakBilingual = (zhText, enText) => {
                 if ('speechSynthesis' in window) {
                     window.speechSynthesis.cancel();
-                    
                     const zhUtterance = new SpeechSynthesisUtterance(zhText);
                     zhUtterance.lang = 'zh-TW';
                     zhUtterance.rate = 0.85;
@@ -116,7 +117,6 @@
                     zhUtterance.onend = () => {
                         if (enText) window.speechSynthesis.speak(enUtterance);
                     };
-
                     window.speechSynthesis.speak(zhUtterance);
                 }
             };
@@ -143,20 +143,20 @@
                 mCtx.fill(pathObj);
             };
 
-            // 核心機制大修正：只要 levelIdx 改變，就強制重新初始化畫布、清空狀態，保證 100% 成功換關
+            // 換關監聽
             useEffect(() => {
                 initCanvas();
                 setCoverage(0);
                 setIsCompleted(false);
                 setSelectedColor(null); 
-                // 給瀏覽器一點時間渲染 DOM 後再播放提問語音
                 setTimeout(() => {
                     speakQuestion();
-                }, 100);
+                }, 150);
             }, [levelIdx]);
 
-            // 點擊「下一關」按鈕的函數
-            const handleNextLevel = () => {
+            // 修正：完全重新設計的跳關控制，切斷所有前一關的殘留事件
+            const handleNextLevel = (e) => {
+                e.stopPropagation(); // 阻止事件冒泡
                 setLevelIdx((prevIdx) => (prevIdx + 1) % LEVELS.length);
             };
 
@@ -227,10 +227,6 @@
             const drawSegment = (x1, y1, x2, y2) => {
                 const ctx = ctxRef.current;
                 ctx.save();
-                
-                ctx.beginPath();
-                ctx.clip(new Path2D(currentLevel.path)); 
-                
                 ctx.globalAlpha = 0.85; 
                 ctx.lineWidth = 26; 
                 ctx.lineCap = 'round';
@@ -301,9 +297,8 @@
             };
 
             return (
-                <div className="min-h-screen flex flex-col items-center p-6 font-sans select-none touch-none max-w-xl mx-auto">
+                <div className="min-h-screen flex flex-col items-center p-6 font-sans select-none max-w-xl mx-auto">
                     
-                    {/* 計算用隱藏畫布 */}
                     <canvas ref={maskCanvasRef} width="200" height="200" className="hidden" />
 
                     {/* 頂部導覽列 */}
@@ -311,7 +306,7 @@
                         <h1 className="font-bold text-2xl tracking-wider">🎨 雙語互動繪本 - 水果樂園</h1>
                     </header>
 
-                    {/* 大問句提示區 (三分行清爽排版) */}
+                    {/* 大問句提示區 (三分行排版) */}
                     <div className="w-full bg-white px-6 py-4 rounded-[32px] shadow-sm mb-6 border-2 border-orange-100 text-center relative flex flex-col justify-center items-center">
                         <h2 className="text-3xl font-black text-gray-800 tracking-wider">
                             {currentLevel.objectName.zh}是什麼顏色的呢？
@@ -330,43 +325,58 @@
                         </button>
                     </div>
 
-                    {/* 畫布核心區 */}
+                    {/* 畫布核心區 (終極修正：改用畫布置中 + SVG 外部 Mask 物理遮罩法，100% 絕對塗不出黑線) */}
                     <div className="relative w-full aspect-square bg-white rounded-[45px] shadow-2xl border-[12px] border-white overflow-hidden mb-6 flex items-center justify-center p-0">
                         <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#000 1.5px, transparent 1.5px), linear-gradient(90deg, #000 1.5px, transparent 1.5px)', backgroundSize: '25px 25px', zIndex: 1 }} />
                         
-                        <div className="relative w-[200px] h-[200px] flex items-center justify-center">
+                        {/* 修正：當彈窗跳出時，外圍容器利用 pointer-events-none 完全釋放觸控權，確保按鈕能被點擊 */}
+                        <div className={`relative w-[200px] h-[200px] flex items-center justify-center ${isCompleted ? 'pointer-events-none' : 'drawing-area'}`}>
                             
-                            {/* 第一層：底色提示線 */}
-                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none">
+                            {/* SVG 頂層混合遮罩層：把畫布疊在裡面，利用 SVG Mask 達成絕對不出界 */}
+                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full" style={{ zIndex: 10 }}>
+                                <defs>
+                                    <mask id="fruitSvgMask">
+                                        {/* 白色代表看得到（水果形狀內部），黑色代表隱形（水果外部） */}
+                                        <rect width="200" height="200" fill="black" />
+                                        <path d={currentLevel.path} fill="white" />
+                                    </mask>
+                                </defs>
+                                
+                                {/* 提示底色線 */}
                                 <path d={currentLevel.path} fill="#FAFAFA" stroke="#EAEAEA" strokeWidth="1" />
+                                
+                                {/* 核心大修正：將互動 Canvas 嵌入 SVG 內部外連，藉由 mask 屬性，在物理上直接卡死框外線條！ */}
+                                <g mask="url(#fruitSvgMask)">
+                                    <foreignObject width="200" height="200">
+                                        <canvas 
+                                            ref={canvasRef} 
+                                            width="200" 
+                                            height="200" 
+                                            onMouseDown={handleStart} 
+                                            onMouseMove={handleMove} 
+                                            onMouseUp={handleEnd} 
+                                            onMouseLeave={handleEnd}
+                                            onTouchStart={handleStart} 
+                                            onTouchMove={handleMove} 
+                                            onTouchEnd={handleEnd}
+                                            className="w-full h-full cursor-crosshair"
+                                        />
+                                    </foreignObject>
+                                </g>
+
+                                {/* 永不被覆蓋的黑色粗線輪廓與細節 (放置在遮罩外) */}
+                                <path d={currentLevel.path} fill="none" stroke="#2D3436" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                             
-                            {/* 第二層：互動繪畫主畫布 */}
-                            <canvas 
-                                ref={canvasRef} 
-                                width="200" 
-                                height="200" 
-                                onMouseDown={handleStart} 
-                                onMouseMove={handleMove} 
-                                onMouseUp={handleEnd} 
-                                onMouseLeave={handleEnd}
-                                onTouchStart={handleStart} 
-                                onTouchMove={handleMove} 
-                                onTouchEnd={handleEnd}
-                                className="absolute inset-0 w-full h-full cursor-crosshair"
-                                style={{ zIndex: 10 }}
-                            />
-                            
-                            {/* 第三層：最上層不變之黑色粗線與裝飾墨線 */}
-                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 20 }}>
-                                <path d={currentLevel.path} fill="none" stroke="#2D3436" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                            {/* 細節墨線獨立層 */}
+                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 15 }}>
                                 {renderLevelDetails(currentLevel.id)}
                             </svg>
                         </div>
 
-                        {/* 過關彈窗 (修正：點擊能 100% 機制正常跳下一關) */}
+                        {/* 過關彈窗 (修正：設定 pointer-events-auto，強制 iPad 瀏覽器優先執行此區點擊) */}
                         {isCompleted && (
-                            <div className="absolute inset-0 z-30 bg-white/85 backdrop-blur-sm flex items-center justify-center animate-fade-in text-center p-4">
+                            <div className="absolute inset-0 z-50 bg-white/85 backdrop-blur-sm flex items-center justify-center animate-fade-in text-center p-4 pointer-events-auto">
                                 <div className="animate-pop-in bg-white p-6 rounded-[35px] shadow-2xl border-4 border-green-400 max-w-[300px] w-full">
                                     <div className="text-3xl mb-2 flex justify-center gap-1.5">
                                         ⭐️ ⭐ ⭐️
@@ -385,7 +395,8 @@
                                     
                                     <button 
                                         onClick={handleNextLevel} 
-                                        className="bg-green-500 text-white px-8 py-3 rounded-2xl font-bold text-xl shadow-lg hover:bg-green-600 active:scale-95 transition-all flex items-center justify-center gap-2 mx-auto w-full"
+                                        className="bg-green-500 text-white px-8 py-3 rounded-2xl font-bold text-xl shadow-lg hover:bg-green-600 active:scale-95 transition-all flex items-center justify-center gap-2 mx-auto w-full cursor-pointer"
+                                        style={{ pointerEvents: 'auto' }}
                                     >
                                         下一關 ➔
                                     </button>
