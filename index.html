@@ -28,11 +28,10 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- 純資料設定 (修正：幾何絕對置中，支援多色判定) ---
+        // --- 純資料設定 (修正：幾何絕對置中，並優化 Path 的閉合連續性) ---
         const LEVELS = [
             { 
                 id: 1, 
-                // 修正：蘋果支援紅色與綠色著色
                 targetColors: ['#FF3D00', '#4CAF50'], 
                 objectName: { zh: '蘋果', en: 'Apple' }, 
                 path: "M 100,65 C 75,60 45,65 45,112 C 45,152 75,172 100,163 C 125,172 155,152 155,112 C 155,65 125,60 100,65 Z"
@@ -57,10 +56,8 @@
             },
             { 
                 id: 5, 
-                // 修正：葡萄支援紫色與綠色著色
                 targetColors: ['#9C27B0', '#4CAF50'], 
                 objectName: { zh: '葡萄', en: 'Grapes' }, 
-                // 純圓形 100% 閉合幾何路徑，確保 Canvas 剪裁範圍能著色
                 path: "M 80,90 A 15,15 0 1,1 80,89.9 Z M 100,90 A 15,15 0 1,1 100,89.9 Z M 120,90 A 15,15 0 1,1 120,89.9 Z M 90,115 A 15,15 0 1,1 90,114.9 Z M 110,115 A 15,15 0 1,1 110,114.9 Z M 100,140 A 15,15 0 1,1 100,139.9 Z"
             }
         ];
@@ -146,7 +143,7 @@
             const lastPos = useRef({ x: 0, y: 0 });
             const currentLevel = LEVELS[levelIdx];
 
-            // 修正：原生安全的排隊語音播放機制，中文沒講完絕不播放英文
+            // 原生排隊語音，中英文不重疊
             const speakBilingual = (zhText, enText) => {
                 if ('speechSynthesis' in window) {
                     window.speechSynthesis.cancel();
@@ -159,7 +156,6 @@
                     enUtterance.lang = 'en-US';
                     enUtterance.rate = 0.95;
 
-                    // 關鍵修正：中文播放結束後，才觸發英文播放
                     zhUtterance.onend = () => {
                         window.speechSynthesis.speak(enUtterance);
                     };
@@ -174,7 +170,6 @@
                 speakBilingual(zhText, enText);
             };
 
-            // 關卡切換初始化
             useEffect(() => {
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
@@ -195,7 +190,7 @@
                 speakQuestion();
             }, [levelIdx]);
 
-            // 最上層細節墨線
+            // 水果細節黑線與高光
             const renderLevelDetails = (id) => {
                 switch(id) {
                     case 1: 
@@ -260,12 +255,11 @@
                 };
             };
 
-            // 修正：完美的每步強制重疊剪裁，100% 鎖死在黑色框線內，絕不溢出
             const drawSegment = (x1, y1, x2, y2) => {
                 const ctx = ctxRef.current;
                 ctx.save();
                 
-                ctx.beginPath(); 
+                ctx.beginPath();
                 ctx.clip(new Path2D(currentLevel.path)); 
                 
                 ctx.globalAlpha = 0.55;
@@ -274,7 +268,7 @@
                 ctx.lineJoin = 'round';
                 ctx.strokeStyle = selectedColor.code;
                 
-                ctx.beginPath(); 
+                ctx.beginPath();
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
                 ctx.stroke();
@@ -285,7 +279,6 @@
             const handleStart = (e) => {
                 if (isCompleted) return;
 
-                // 修正：拿起錯誤彩色筆、或沒拿畫筆就去畫時的專屬語音語音反饋
                 if (!selectedColor) {
                     speakBilingual("請先選一個彩筆喔！", "Please choose a color first!");
                     return;
@@ -333,7 +326,6 @@
                 
                 if (percent >= 80 && !isCompleted) {
                     setIsCompleted(true);
-                    // 修正：動態播報孩子當前塗上的「（顏色）的（水果）」雙語組合
                     const finalZh = `哇！太棒了！你完成了${selectedColor.zh}的${currentLevel.objectName.zh}！`;
                     const finalEn = `Wonderful! You finished the ${selectedColor.en} ${currentLevel.objectName.en}!`;
                     speakBilingual(finalZh, finalEn);
@@ -368,7 +360,7 @@
                         </button>
                     </header>
 
-                    {/* 引導提問對話框 */}
+                    {/* 引導對話框 */}
                     <div className="text-center mb-5">
                         <div className="inline-flex items-center bg-white px-5 py-2 rounded-2xl shadow-sm mb-3 border border-orange-100 gap-2">
                             <h2 className="text-xl md:text-2xl font-black text-gray-800">
@@ -391,39 +383,52 @@
                         </div>
                     </div>
 
-                    {/* 畫布核心區 (修正：幾何坐標完美置中) */}
-                    <div className="relative w-full max-w-sm aspect-square bg-white rounded-[45px] shadow-2xl border-[10px] border-white overflow-hidden mb-6 p-8 flex items-center justify-center">
-                        <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#000 1.5px, transparent 1.5px), linear-gradient(90deg, #000 1.5px, transparent 1.5px)', backgroundSize: '25px 25px' }} />
+                    {/* 畫布核心區 (CSS層面物理卡死，確保完全置中且絕不溢出) */}
+                    <div className="relative w-full max-w-sm aspect-square bg-white rounded-[45px] shadow-2xl border-[10px] border-white overflow-hidden mb-6 flex items-center justify-center p-0">
+                        {/* 背景網格線 */}
+                        <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#000 1.5px, transparent 1.5px), linear-gradient(90deg, #000 1.5px, transparent 1.5px)', backgroundSize: '25px 25px', zIndex: 1 }} />
                         
-                        <div className="relative w-full h-full max-w-[200px] max-w-[200px] aspect-square">
-                            {/* 第一層：底色提示線 */}
-                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none">
-                                <path d={currentLevel.path} fill="#FAFAFA" stroke="#EAEAEA" strokeWidth="1" />
-                            </svg>
+                        {/* 修正：強制置中且固定 200x200 框線形狀區 */}
+                        <div className="relative w-[200px] h-[200px] flex items-center justify-center">
                             
-                            {/* 第二層：畫布 */}
-                            <canvas 
-                                ref={canvasRef} 
-                                width="200" 
-                                height="200" 
-                                onMouseDown={handleStart} 
-                                onMouseMove={handleMove} 
-                                onMouseUp={handleEnd} 
-                                onMouseLeave={handleEnd}
-                                onTouchStart={handleStart} 
-                                onTouchMove={handleMove} 
-                                onTouchEnd={handleEnd}
-                                className="absolute inset-0 w-full h-full z-10 cursor-crosshair"
-                            />
+                            {/* 核心修正：給畫布層專用的幾何遮罩容器，利用 CSS clip-path 直接從物理空間卡死 */}
+                            <div 
+                                className="absolute inset-0 w-full h-full"
+                                style={{ 
+                                    clipPath: `path('${currentLevel.path}')`,
+                                    WebkitClipPath: `path('${currentLevel.path}')`,
+                                    zIndex: 10
+                                }}
+                            >
+                                {/* 第一層：底色淡色提示線 */}
+                                <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none">
+                                    <path d={currentLevel.path} fill="#FAFAFA" />
+                                </svg>
+                                
+                                {/* 第二層：繪畫 Canvas */}
+                                <canvas 
+                                    ref={canvasRef} 
+                                    width="200" 
+                                    height="200" 
+                                    onMouseDown={handleStart} 
+                                    onMouseMove={handleMove} 
+                                    onMouseUp={handleEnd} 
+                                    onMouseLeave={handleEnd}
+                                    onTouchStart={handleStart} 
+                                    onTouchMove={handleMove} 
+                                    onTouchEnd={handleEnd}
+                                    className="absolute inset-0 w-full h-full cursor-crosshair"
+                                />
+                            </div>
                             
-                            {/* 第三層：最上層粗黑外框 */}
-                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none z-20">
+                            {/* 第三層：蓋在最上層的黑色邊框線與水果細節 (不受遮罩影響，確保黑線清晰完整) */}
+                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 20 }}>
                                 <path d={currentLevel.path} fill="none" stroke="#2D3436" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                                 {renderLevelDetails(currentLevel.id)}
                             </svg>
                         </div>
 
-                        {/* 過關彈跳視窗 */}
+                        {/* 過關彈窗 */}
                         {isCompleted && (
                             <div className="absolute inset-0 z-30 bg-white/75 backdrop-blur-sm flex items-center justify-center animate-fade-in text-center p-4">
                                 <div className="animate-pop-in bg-white p-7 rounded-[35px] shadow-2xl border-4 border-green-400 max-w-[280px] w-full">
@@ -456,7 +461,7 @@
                                 key={c.code} 
                                 onClick={() => { 
                                     setSelectedColor(c); 
-                                    speakBilingual(c.zh, c.code === currentLevel.targetColors[0] || c.code === currentLevel.targetColors[1] ? c.en : ""); 
+                                    speakBilingual(c.zh, currentLevel.targetColors.includes(c.code) ? c.en : ""); 
                                 }}
                                 className={`flex flex-col items-center transition-all duration-300 ${selectedColor?.code === c.code ? 'scale-110 -translate-y-2' : 'opacity-65 hover:opacity-100'}`}
                             >
