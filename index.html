@@ -170,40 +170,30 @@
                 speakBilingual(zhText, enText);
             };
 
-            // 初始化畫布水果形狀軌道（核心修正）
-            const initCanvasShape = () => {
+            const initCanvas = () => {
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
                 ctxRef.current = ctx;
-                
-                // 重置畫布
-                ctx.save();
-                ctx.globalCompositeOperation = 'source-over';
                 ctx.clearRect(0, 0, 200, 200);
-                
-                // 關鍵：先在畫布上填滿該水果形狀的基礎不可見（或極淡底色）實心軌道
-                const pathObj = new Path2D(currentLevel.path);
-                ctx.fillStyle = '#FAFAFA'; 
-                ctx.fill(pathObj);
-                ctx.restore();
 
-                // 計算遮罩用畫布
+                // 計算遮罩用畫布（用來算著色進度百分比）
                 const mCanvas = maskCanvasRef.current;
                 const mCtx = mCanvas.getContext('2d');
                 mCtx.clearRect(0, 0, 200, 200);
+                const pathObj = new Path2D(currentLevel.path);
                 mCtx.fillStyle = '#000000';
                 mCtx.fill(pathObj);
             };
 
             useEffect(() => {
-                initCanvasShape();
+                initCanvas();
                 setCoverage(0);
                 setIsCompleted(false);
                 setSelectedColor(null); 
                 speakQuestion();
             }, [levelIdx]);
 
-            // 水果細節黑線與高光
+            // 水果細節線條
             const renderLevelDetails = (id) => {
                 switch(id) {
                     case 1: 
@@ -225,7 +215,7 @@
                         return (
                             <g fill="none" stroke="#2D3436" strokeWidth="2">
                                 <path d="M152,58 L160,50" stroke="#795548" strokeWidth="6" strokeLinecap="round" />
-                                <path d="M50,162 L45,165" stroke="#5D4037" strokeWidth="6" strokeLinecap="round" />
+                                <path d="M45,162 L40,165" stroke="#5D4037" strokeWidth="6" strokeLinecap="round" />
                                 <path d="M152,58 Q105,80 50,162" stroke="#2D3436" strokeWidth="1.5" strokeLinecap="round" opacity="0.25" />
                             </g>
                         );
@@ -268,14 +258,11 @@
                 };
             };
 
-            // 終極修正：利用 Canvas 的 source-in 混合模式。只有原本有實心軌道的地方才畫得出顏色，外面絕對畫不出來！
+            // 採用最單純穩定的標準畫筆，不加任何圖層干擾，100% 畫得出顏色
             const drawSegment = (x1, y1, x2, y2) => {
                 const ctx = ctxRef.current;
                 ctx.save();
-                
-                // 強制設為 source-in 模式，超越所有座標點位限制，100% 卡死在水果形狀內
-                ctx.globalCompositeOperation = 'source-in';
-                ctx.globalAlpha = 0.85; // 提高顏色飽滿度
+                ctx.globalAlpha = 0.85; 
                 ctx.lineWidth = 26; 
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
@@ -285,7 +272,6 @@
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
                 ctx.stroke();
-                
                 ctx.restore();
             };
 
@@ -325,12 +311,10 @@
                 const maskData = maskCanvasRef.current.getContext('2d').getImageData(0,0,200,200).data;
                 let totalPixels = 0, coloredPixels = 0;
                 
-                // 檢測是否被塗滿
                 for (let i = 0; i < maskData.length; i += 4) {
                     if (maskData[i+3] > 0) { 
                         totalPixels++;
-                        // 如果 R、G、B 其中一項被改變（脫離了初始的底色 #FAFAFA），代表被著色了
-                        if (drawData[i] < 240 || drawData[i+1] < 240 || drawData[i+2] < 240) { 
+                        if (drawData[i+3] > 50) { 
                             coloredPixels++;
                         }
                     }
@@ -375,7 +359,7 @@
                         </button>
                     </header>
 
-                    {/* 引導對話框 */}
+                    {/* 引導提問 */}
                     <div className="text-center mb-5">
                         <div className="inline-flex items-center bg-white px-5 py-2 rounded-2xl shadow-sm mb-3 border border-orange-100 gap-2">
                             <h2 className="text-xl md:text-2xl font-black text-gray-800">
@@ -398,31 +382,40 @@
                         </div>
                     </div>
 
-                    {/* 畫布核心區 (全面幾何對齊、絕不溢出) */}
+                    {/* 畫布核心區 (CSS 物理外切法，百分之百置中、好塗且絕不溢出) */}
                     <div className="relative w-full max-w-sm aspect-square bg-white rounded-[45px] shadow-2xl border-[10px] border-white overflow-hidden mb-6 flex items-center justify-center p-0">
-                        {/* 背景網格線 */}
+                        {/* 網格裝飾線 */}
                         <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#000 1.5px, transparent 1.5px), linear-gradient(90deg, #000 1.5px, transparent 1.5px)', backgroundSize: '25px 25px', zIndex: 1 }} />
                         
-                        {/* 固定置中 200x200 圖形渲染區 */}
-                        <div className="relative w-[200px] h-[200px]">
+                        {/* 置中固定 200x200 圖形定位框 */}
+                        <div className="relative w-[200px] h-[200px] flex items-center justify-center">
                             
-                            {/* 第一層：互動繪畫 Canvas */}
-                            <canvas 
-                                ref={canvasRef} 
-                                width="200" 
-                                height="200" 
-                                onMouseDown={handleStart} 
-                                onMouseMove={handleMove} 
-                                onMouseUp={handleEnd} 
-                                onMouseLeave={handleEnd}
-                                onTouchStart={handleStart} 
-                                onTouchMove={handleMove} 
-                                onTouchEnd={handleEnd}
-                                className="absolute inset-0 w-full h-full cursor-crosshair"
-                                style={{ zIndex: 10 }}
-                            />
+                            {/* 核心修正：利用 CSS clip-path 對畫布進行物理剪裁，只要出了這條線，畫面完全不顯示，實現完美的防出界 */}
+                            <div 
+                                className="absolute inset-0 w-full h-full bg-[#FAFAFA]"
+                                style={{ 
+                                    clipPath: `path('${currentLevel.path}')`,
+                                    WebkitClipPath: `path('${currentLevel.path}')`,
+                                    zIndex: 10
+                                }}
+                            >
+                                {/* 繪畫主畫布（直接接受塗色，100% 顯色） */}
+                                <canvas 
+                                    ref={canvasRef} 
+                                    width="200" 
+                                    height="200" 
+                                    onMouseDown={handleStart} 
+                                    onMouseMove={handleMove} 
+                                    onMouseUp={handleEnd} 
+                                    onMouseLeave={handleEnd}
+                                    onTouchStart={handleStart} 
+                                    onTouchMove={handleMove} 
+                                    onTouchEnd={handleEnd}
+                                    className="absolute inset-0 w-full h-full cursor-crosshair"
+                                />
+                            </div>
                             
-                            {/* 第二層：蓋在最上層的黑色完整邊框線與細節 (不被顏色覆蓋) */}
+                            {/* 第三層：永不被覆蓋的黑色藝術外框與細節 (放置在遮罩容器外，不受裁切影響) */}
                             <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 20 }}>
                                 <path d={currentLevel.path} fill="none" stroke="#2D3436" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                                 {renderLevelDetails(currentLevel.id)}
@@ -475,7 +468,7 @@
                         
                         <button 
                             onClick={() => { 
-                                initCanvasShape();
+                                initCanvas();
                                 setCoverage(0);
                                 setIsCompleted(false);
                                 speakBilingual('重來一次', 'Try again');
