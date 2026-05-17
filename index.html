@@ -157,7 +157,7 @@
                     enUtterance.rate = 0.95;
 
                     zhUtterance.onend = () => {
-                        window.speechSynthesis.speak(enUtterance);
+                        if (enText) window.speechSynthesis.speak(enUtterance);
                     };
 
                     window.speechSynthesis.speak(zhUtterance);
@@ -170,20 +170,33 @@
                 speakBilingual(zhText, enText);
             };
 
-            useEffect(() => {
+            // 初始化畫布水果形狀軌道（核心修正）
+            const initCanvasShape = () => {
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
                 ctxRef.current = ctx;
+                
+                // 重置畫布
+                ctx.save();
+                ctx.globalCompositeOperation = 'source-over';
                 ctx.clearRect(0, 0, 200, 200);
                 
+                // 關鍵：先在畫布上填滿該水果形狀的基礎不可見（或極淡底色）實心軌道
+                const pathObj = new Path2D(currentLevel.path);
+                ctx.fillStyle = '#FAFAFA'; 
+                ctx.fill(pathObj);
+                ctx.restore();
+
+                // 計算遮罩用畫布
                 const mCanvas = maskCanvasRef.current;
                 const mCtx = mCanvas.getContext('2d');
                 mCtx.clearRect(0, 0, 200, 200);
-                
-                const pathObj = new Path2D(currentLevel.path);
                 mCtx.fillStyle = '#000000';
                 mCtx.fill(pathObj);
+            };
 
+            useEffect(() => {
+                initCanvasShape();
                 setCoverage(0);
                 setIsCompleted(false);
                 setSelectedColor(null); 
@@ -255,14 +268,14 @@
                 };
             };
 
+            // 終極修正：利用 Canvas 的 source-in 混合模式。只有原本有實心軌道的地方才畫得出顏色，外面絕對畫不出來！
             const drawSegment = (x1, y1, x2, y2) => {
                 const ctx = ctxRef.current;
                 ctx.save();
                 
-                ctx.beginPath();
-                ctx.clip(new Path2D(currentLevel.path)); 
-                
-                ctx.globalAlpha = 0.55;
+                // 強制設為 source-in 模式，超越所有座標點位限制，100% 卡死在水果形狀內
+                ctx.globalCompositeOperation = 'source-in';
+                ctx.globalAlpha = 0.85; // 提高顏色飽滿度
                 ctx.lineWidth = 26; 
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
@@ -312,10 +325,12 @@
                 const maskData = maskCanvasRef.current.getContext('2d').getImageData(0,0,200,200).data;
                 let totalPixels = 0, coloredPixels = 0;
                 
+                // 檢測是否被塗滿
                 for (let i = 0; i < maskData.length; i += 4) {
                     if (maskData[i+3] > 0) { 
                         totalPixels++;
-                        if (drawData[i+3] > 50) { 
+                        // 如果 R、G、B 其中一項被改變（脫離了初始的底色 #FAFAFA），代表被著色了
+                        if (drawData[i] < 240 || drawData[i+1] < 240 || drawData[i+2] < 240) { 
                             coloredPixels++;
                         }
                     }
@@ -324,7 +339,7 @@
                 const percent = totalPixels > 0 ? (coloredPixels / totalPixels) * 100 : 0;
                 setCoverage(percent);
                 
-                if (percent >= 80 && !isCompleted) {
+                if (percent >= 75 && !isCompleted) {
                     setIsCompleted(true);
                     const finalZh = `哇！太棒了！你完成了${selectedColor.zh}的${currentLevel.objectName.zh}！`;
                     const finalEn = `Wonderful! You finished the ${selectedColor.en} ${currentLevel.objectName.en}!`;
@@ -377,51 +392,37 @@
                         <div className="flex items-center gap-3 justify-center text-gray-500 font-bold">
                             <span className="text-xs">{lang === 'zh' ? '塗色進度' : 'Progress'}</span>
                             <div className="w-44 h-3.5 bg-gray-200 rounded-full overflow-hidden border border-gray-300">
-                                <div className="h-full bg-green-400 transition-all duration-300" style={{width: `${Math.min(100, (coverage/80)*100)}%`}}></div>
+                                <div className="h-full bg-green-400 transition-all duration-300" style={{width: `${Math.min(100, (coverage/75)*100)}%`}}></div>
                             </div>
-                            <span className={`text-xs ${coverage >= 80 ? 'text-green-500 font-black' : ''}`}>{Math.round(Math.min(100, (coverage/80)*100))}%</span>
+                            <span className={`text-xs ${coverage >= 75 ? 'text-green-500 font-black' : ''}`}>{Math.round(Math.min(100, (coverage/75)*100))}%</span>
                         </div>
                     </div>
 
-                    {/* 畫布核心區 (CSS層面物理卡死，確保完全置中且絕不溢出) */}
+                    {/* 畫布核心區 (全面幾何對齊、絕不溢出) */}
                     <div className="relative w-full max-w-sm aspect-square bg-white rounded-[45px] shadow-2xl border-[10px] border-white overflow-hidden mb-6 flex items-center justify-center p-0">
                         {/* 背景網格線 */}
                         <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#000 1.5px, transparent 1.5px), linear-gradient(90deg, #000 1.5px, transparent 1.5px)', backgroundSize: '25px 25px', zIndex: 1 }} />
                         
-                        {/* 修正：強制置中且固定 200x200 框線形狀區 */}
-                        <div className="relative w-[200px] h-[200px] flex items-center justify-center">
+                        {/* 固定置中 200x200 圖形渲染區 */}
+                        <div className="relative w-[200px] h-[200px]">
                             
-                            {/* 核心修正：給畫布層專用的幾何遮罩容器，利用 CSS clip-path 直接從物理空間卡死 */}
-                            <div 
-                                className="absolute inset-0 w-full h-full"
-                                style={{ 
-                                    clipPath: `path('${currentLevel.path}')`,
-                                    WebkitClipPath: `path('${currentLevel.path}')`,
-                                    zIndex: 10
-                                }}
-                            >
-                                {/* 第一層：底色淡色提示線 */}
-                                <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none">
-                                    <path d={currentLevel.path} fill="#FAFAFA" />
-                                </svg>
-                                
-                                {/* 第二層：繪畫 Canvas */}
-                                <canvas 
-                                    ref={canvasRef} 
-                                    width="200" 
-                                    height="200" 
-                                    onMouseDown={handleStart} 
-                                    onMouseMove={handleMove} 
-                                    onMouseUp={handleEnd} 
-                                    onMouseLeave={handleEnd}
-                                    onTouchStart={handleStart} 
-                                    onTouchMove={handleMove} 
-                                    onTouchEnd={handleEnd}
-                                    className="absolute inset-0 w-full h-full cursor-crosshair"
-                                />
-                            </div>
+                            {/* 第一層：互動繪畫 Canvas */}
+                            <canvas 
+                                ref={canvasRef} 
+                                width="200" 
+                                height="200" 
+                                onMouseDown={handleStart} 
+                                onMouseMove={handleMove} 
+                                onMouseUp={handleEnd} 
+                                onMouseLeave={handleEnd}
+                                onTouchStart={handleStart} 
+                                onTouchMove={handleMove} 
+                                onTouchEnd={handleEnd}
+                                className="absolute inset-0 w-full h-full cursor-crosshair"
+                                style={{ zIndex: 10 }}
+                            />
                             
-                            {/* 第三層：蓋在最上層的黑色邊框線與水果細節 (不受遮罩影響，確保黑線清晰完整) */}
+                            {/* 第二層：蓋在最上層的黑色完整邊框線與細節 (不被顏色覆蓋) */}
                             <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 20 }}>
                                 <path d={currentLevel.path} fill="none" stroke="#2D3436" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                                 {renderLevelDetails(currentLevel.id)}
@@ -474,8 +475,7 @@
                         
                         <button 
                             onClick={() => { 
-                                const ctx = ctxRef.current;
-                                ctx.clearRect(0, 0, 200, 200);
+                                initCanvasShape();
                                 setCoverage(0);
                                 setIsCompleted(false);
                                 speakBilingual('重來一次', 'Try again');
