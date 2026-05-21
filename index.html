@@ -3,21 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>雙語著色大師 - 水果樂園</title>
+    <title>雙語互動繪本 - 小熊的水果樂園</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap" rel="stylesheet">
+
     <style>
+        .font-en-storybook {
+            font-family: 'Fredoka', sans-serif;
+        }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes popIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
         @keyframes confettiFall {
             0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
             100% { transform: translateY(400px) rotate(360deg); opacity: 0; }
         }
+        @keyframes fruitDrop {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            50% { transform: translateY(80px) scale(0.9); opacity: 0.8; }
+            100% { transform: translateY(160px) scale(0); opacity: 0; }
+        }
         .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
         .animate-pop-in { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         .animate-confetti { animation: confettiFall 3s linear infinite; position: absolute; }
+        .fruit-falling { animation: fruitDrop 0.5s cubic-bezier(0.6, -0.28, 0.735, 0.045) forwards; }
         canvas { touch-action: none; }
         body { -webkit-tap-highlight-color: transparent; }
     </style>
@@ -28,37 +40,82 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- 純資料設定 (修正：幾何絕對置中，並優化 Path 的閉合連續性) ---
-        const LEVELS = [
+        // --- 第一階段：著色關卡資料 ---
+        const COLOR_LEVELS = [
             { 
                 id: 1, 
                 targetColors: ['#FF3D00', '#4CAF50'], 
                 objectName: { zh: '蘋果', en: 'Apple' }, 
+                emoji: '🍎',
                 path: "M 100,65 C 75,60 45,65 45,112 C 45,152 75,172 100,163 C 125,172 155,152 155,112 C 155,65 125,60 100,65 Z"
             },
             { 
                 id: 2, 
                 targetColors: ['#4CAF50'], 
                 objectName: { zh: '樹葉', en: 'Leaf' }, 
+                emoji: '🌿',
                 path: "M 100,35 C 55,72 50,142 100,182 C 150,142 145,72 100,35 Z"
             },
             { 
                 id: 3, 
                 targetColors: ['#FFD600'], 
                 objectName: { zh: '香蕉', en: 'Banana' }, 
+                emoji: '🍌',
                 path: "M 152,58 C 120,58 60,90 50,162 C 72,162 125,120 152,58 Z"
             },
             { 
                 id: 4, 
                 targetColors: ['#FF9800'], 
                 objectName: { zh: '橘子', en: 'Orange' }, 
+                emoji: '🍊',
                 path: "M 100,55 C 142,55 170,83 170,122 C 170,162 142,190 100,190 C 58,190 30,162 30,122 C 30,83 58,55 100,55 Z"
             },
             { 
                 id: 5, 
                 targetColors: ['#9C27B0', '#4CAF50'], 
                 objectName: { zh: '葡萄', en: 'Grapes' }, 
+                emoji: '🍇',
                 path: "M 80,90 A 15,15 0 1,1 80,89.9 Z M 100,90 A 15,15 0 1,1 100,89.9 Z M 120,90 A 15,15 0 1,1 120,89.9 Z M 90,115 A 15,15 0 1,1 90,114.9 Z M 110,115 A 15,15 0 1,1 110,114.9 Z M 100,140 A 15,15 0 1,1 100,139.9 Z"
+            }
+        ];
+
+        // --- 第二階段：數數關卡資料 ---
+        const COUNT_LEVELS = [
+            {
+                id: 1,
+                targetCount: 3,
+                emoji: '🍎',
+                objectName: { zh: '蘋果', en: 'apples' },
+                questionZh: '小熊農夫說：請幫我採 3 顆蘋果放進籃子裡！',
+                questionEn: 'Farmer Bear says: Please help me pick 3 apples into the basket!',
+                positions: [
+                    {x:22, y:14}, {x:46, y:8}, {x:66, y:12}, {x:14, y:30}, {x:36, y:24},
+                    {x:58, y:22}, {x:76, y:28}, {x:26, y:45}, {x:48, y:42}, {x:72, y:46}
+                ]
+            },
+            {
+                id: 2,
+                targetCount: 5,
+                emoji: '🍊',
+                objectName: { zh: '橘子', en: 'oranges' },
+                questionZh: '小熊農夫說：請幫我採 5 顆橘子放進籃子裡！',
+                questionEn: 'Farmer Bear says: Please help me pick 5 oranges into the basket!',
+                positions: [
+                    {x:30, y:10}, {x:52, y:6}, {x:72, y:14}, {x:18, y:26}, {x:42, y:22},
+                    {x:60, y:20}, {x:82, y:28}, {x:24, y:44}, {x:48, y:46}, {x:68, y:42}
+                ]
+            },
+            {
+                id: 3,
+                targetCount: 4,
+                emoji: '🍌',
+                objectName: { zh: '香蕉', en: 'bananas' },
+                questionZh: '小熊農夫說：請幫我採 4 根香蕉放進籃子裡！',
+                questionEn: 'Farmer Bear says: Please help me pick 4 bananas into the basket!',
+                positions: [
+                    {x:22, y:14}, {x:46, y:8}, {x:66, y:12}, {x:14, y:30}, {x:36, y:24},
+                    {x:58, y:22}, {x:76, y:28}, {x:26, y:45}, {x:48, y:42}, {x:72, y:46}
+                ]
             }
         ];
 
@@ -71,129 +128,138 @@
             { zh: '紫色', en: 'Purple', code: '#9C27B0' }
         ];
 
-        // --- 純 React SVG 圖標元件 ---
-        const PaletteIcon = () => (
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.03456 19.176 5.09705 19.435 5.01633 19.6773C4.85691 20.1557 4.77 20.6678 4.77 21.2C4.77 21.6418 5.12817 22 5.57 22H12Z" />
-                <circle cx="7.5" cy="10.5" r="1.5" fill="currentColor" />
-                <circle cx="11.5" cy="7.5" r="1.5" fill="currentColor" />
-                <circle cx="16.5" cy="9.5" r="1.5" fill="currentColor" />
-                <circle cx="15.5" cy="14.5" r="1.5" fill="currentColor" />
-            </svg>
-        );
-
-        const LanguagesIcon = () => (
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m5 8 6 6" /><path d="m4 14 6-6 2-3" /><path d="M2 5h12" /><path d="M7 2h1" /><path d="m22 22-5-10-5 10" /><path d="M14 18h6" /><path d="M12 5c.6 2 2 4 4 5.5" /><path d="M20 5c-.3 1.2-1.2 2.7-3 4" />
-            </svg>
-        );
-
-        const VolumeIcon = () => (
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-            </svg>
-        );
-
-        const RotateCcwIcon = () => (
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><polyline points="3 3 3 8 8 8" />
-            </svg>
-        );
-
-        const StarIcon = ({ fill = "none" }) => (
-            <svg className="w-7 h-7 text-yellow-400" viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-            </svg>
-        );
-
-        const ChevronRightIcon = () => (
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6" />
-            </svg>
-        );
-
-        const Confetti = () => {
-            return Array.from({ length: 30 }).map((_, i) => (
-                <div 
-                    key={i}
-                    className="animate-confetti w-3 h-3 rounded-sm"
-                    style={{
-                        backgroundColor: ['#FF3D00', '#FFD600', '#4CAF50', '#2196F3', '#FF9800', '#9C27B0'][i % 6],
-                        left: `${Math.random() * 100}%`,
-                        top: `-20px`,
-                        animationDelay: `${Math.random() * 2.5}s`,
-                        transform: `rotate(${Math.random() * 360}deg)`
-                    }}
-                />
-            ));
-        };
-
         const App = () => {
+            // gameStage: 'intro' (故事開頭) | 'color' (第一章著色) | 'transition' (過渡故事) | 'count' (第二章採摘)
+            const [gameStage, setGameStage] = useState('intro');
             const [levelIdx, setLevelIdx] = useState(0);
-            const [lang, setLang] = useState('zh');
-            const [selectedColor, setSelectedColor] = useState(null);
             const [coverage, setCoverage] = useState(0);
             const [isCompleted, setIsCompleted] = useState(false);
             const [isDrawing, setIsDrawing] = useState(false);
+            const [selectedColor, setSelectedColor] = useState(null);
             
+            const [basketCount, setBasketCount] = useState(0);
+            const [droppedFruits, setDroppedFruits] = useState([]); 
+
             const canvasRef = useRef(null);
             const maskCanvasRef = useRef(null);
             const ctxRef = useRef(null);
             const lastPos = useRef({ x: 0, y: 0 });
-            const currentLevel = LEVELS[levelIdx];
 
-            // 原生排隊語音，中英文不重疊
+            const currentColorLevel = COLOR_LEVELS[levelIdx];
+            const currentCountLevel = COUNT_LEVELS[levelIdx];
+
+            // 雙語語音系統
             const speakBilingual = (zhText, enText) => {
                 if ('speechSynthesis' in window) {
                     window.speechSynthesis.cancel();
                     
                     const zhUtterance = new SpeechSynthesisUtterance(zhText);
                     zhUtterance.lang = 'zh-TW';
-                    zhUtterance.rate = 0.95;
+                    zhUtterance.rate = 0.85;
 
                     const enUtterance = new SpeechSynthesisUtterance(enText);
                     enUtterance.lang = 'en-US';
-                    enUtterance.rate = 0.95;
+                    enUtterance.rate = 0.85;
 
                     zhUtterance.onend = () => {
                         if (enText) window.speechSynthesis.speak(enUtterance);
                     };
-
                     window.speechSynthesis.speak(zhUtterance);
                 }
             };
 
             const speakQuestion = () => {
-                const zhText = `${currentLevel.objectName.zh}是什麼顏色的呢？`;
-                const enText = `What color is the ${currentLevel.objectName.en}?`;
-                speakBilingual(zhText, enText);
+                if (gameStage === 'color') {
+                    const zhText = `小熊分不清顏色，這是${currentColorLevel.objectName.zh}喔！它是什麼顏色的呢？`;
+                    const enText = `Bear cannot see colors well. This is an ${currentColorLevel.objectName.en}! What color is it?`;
+                    speakBilingual(zhText, enText);
+                } else if (gameStage === 'count') {
+                    speakBilingual(currentCountLevel.questionZh, currentCountLevel.questionEn);
+                }
             };
 
             const initCanvas = () => {
+                if (gameStage !== 'color' || !canvasRef.current) return;
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
                 ctxRef.current = ctx;
                 ctx.clearRect(0, 0, 200, 200);
 
-                // 計算遮罩用畫布（用來算著色進度百分比）
-                const mCanvas = maskCanvasRef.current;
-                const mCtx = mCanvas.getContext('2d');
+                const maskCanvas = maskCanvasRef.current;
+                const mCtx = maskCanvas.getContext('2d');
                 mCtx.clearRect(0, 0, 200, 200);
-                const pathObj = new Path2D(currentLevel.path);
+                const pathObj = new Path2D(currentColorLevel.path);
                 mCtx.fillStyle = '#000000';
                 mCtx.fill(pathObj);
             };
 
+            // 故事章節與關卡切換監聽
             useEffect(() => {
-                initCanvas();
-                setCoverage(0);
-                setIsCompleted(false);
-                setSelectedColor(null); 
-                speakQuestion();
-            }, [levelIdx]);
+                if (gameStage === 'intro') {
+                    speakBilingual("你在森林遇見了一隻小熊。小熊有色弱，分不清楚水果的顏色，你能幫幫牠嗎？", "You met a little bear in the forest. The bear is colorblind and cannot tell the colors of fruits. Can you help him?");
+                } else if (gameStage === 'transition') {
+                    speakBilingual("你都塗上了正確的顏色，小熊感到非常高興！小熊是一個農夫，他邀請你一起去他的果園採摘水果。", "You colored everything correctly, and the little bear is so happy! He is a farmer and invites you to his orchard to pick fruits.");
+                } else if (gameStage === 'color') {
+                    initCanvas();
+                    setCoverage(0);
+                    setIsCompleted(false);
+                    setSelectedColor(null);
+                    setTimeout(() => speakQuestion(), 150);
+                } else if (gameStage === 'count') {
+                    setBasketCount(0);
+                    setDroppedFruits([]);
+                    setIsCompleted(false);
+                    setSelectedColor(null);
+                    setTimeout(() => speakQuestion(), 150);
+                }
+            }, [levelIdx, gameStage]);
 
-            // 水果細節線條
+            // 繪本跳關與故事線推進核心控制
+            const handleNextLevel = () => {
+                if (gameStage === 'color') {
+                    if (levelIdx + 1 < COLOR_LEVELS.length) {
+                        setLevelIdx(levelIdx + 1);
+                    } else {
+                        // 著色全過 ➔ 進入故事過渡畫面
+                        setGameStage('transition');
+                        setLevelIdx(0);
+                    }
+                } else if (gameStage === 'count') {
+                    if (levelIdx + 1 < COUNT_LEVELS.length) {
+                        setLevelIdx(levelIdx + 1);
+                    } else {
+                        // 採摘全過 ➔ 回到開頭循環
+                        setGameStage('intro');
+                        setLevelIdx(0);
+                    }
+                }
+            };
+
+            const handleFruitClick = (index) => {
+                if (isCompleted || droppedFruits.includes(index)) return;
+
+                const nextCount = basketCount + 1;
+                if (nextCount > currentCountLevel.targetCount) {
+                    speakBilingual("籃子太滿了，再數一次看看喔！", "The basket is too full! Let's try counting again.");
+                    setBasketCount(0);
+                    setDroppedFruits([]);
+                    return;
+                }
+
+                setDroppedFruits([...droppedFruits, index]);
+                setBasketCount(nextCount);
+                speakBilingual(`${nextCount}`, `${nextCount}`);
+
+                if (nextCount === currentCountLevel.targetCount) {
+                    setTimeout(() => {
+                        setIsCompleted(true);
+                        const winZh = `哇！太棒了！小熊農夫好開心，你採收了 ${currentCountLevel.targetCount} 顆${currentCountLevel.objectName.zh}！`;
+                        const winEn = `Wonderful! Farmer Bear is so happy! You harvested ${currentCountLevel.targetCount} ${currentCountLevel.objectName.en}!`;
+                        speakBilingual(winZh, winEn);
+                    }, 600);
+                }
+            };
+
             const renderLevelDetails = (id) => {
                 switch(id) {
                     case 1: 
@@ -258,16 +324,16 @@
                 };
             };
 
-            // 採用最單純穩定的標準畫筆，不加任何圖層干擾，100% 畫得出顏色
             const drawSegment = (x1, y1, x2, y2) => {
                 const ctx = ctxRef.current;
                 ctx.save();
+                ctx.beginPath();
+                ctx.clip(new Path2D(currentColorLevel.path)); 
                 ctx.globalAlpha = 0.85; 
                 ctx.lineWidth = 26; 
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
                 ctx.strokeStyle = selectedColor.code;
-                
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
@@ -277,19 +343,17 @@
 
             const handleStart = (e) => {
                 if (isCompleted) return;
-
                 if (!selectedColor) {
                     speakBilingual("請先選一個彩筆喔！", "Please choose a color first!");
                     return;
                 }
-                if (!currentLevel.targetColors.includes(selectedColor.code)) {
+                if (!currentColorLevel.targetColors.includes(selectedColor.code)) {
                     speakBilingual(
-                        `不對喔，${currentLevel.objectName.zh}不是${selectedColor.zh}的喔！`, 
-                        `No, ${currentLevel.objectName.en} is not ${selectedColor.en}!`
+                        `小熊抓抓頭說：不對喔，${currentColorLevel.objectName.zh}不是${selectedColor.zh}的喔！`, 
+                        `Bear shakes his head: No, ${currentColorLevel.objectName.en} is not ${selectedColor.en}!`
                     );
                     return;
                 }
-
                 setIsDrawing(true);
                 const pos = getPos(e);
                 lastPos.current = pos;
@@ -325,162 +389,279 @@
                 
                 if (percent >= 75 && !isCompleted) {
                     setIsCompleted(true);
-                    const finalZh = `哇！太棒了！你完成了${selectedColor.zh}的${currentLevel.objectName.zh}！`;
-                    const finalEn = `Wonderful! You finished the ${selectedColor.en} ${currentLevel.objectName.en}!`;
+                    const finalZh = `小熊開心地跳舞！謝謝你幫忙完成了${selectedColor.zh}的${currentColorLevel.objectName.zh}！`;
+                    const finalEn = `Bear is dancing happily! Thank you for finishing the ${selectedColor.en} ${currentColorLevel.objectName.en}!`;
                     speakBilingual(finalZh, finalEn);
                 }
             };
 
             return (
-                <div className="min-h-screen flex flex-col items-center p-4 font-sans select-none touch-none">
+                <div className="min-h-screen flex flex-col items-center p-6 font-sans select-none max-w-xl mx-auto relative">
                     <canvas ref={maskCanvasRef} width="200" height="200" className="hidden" />
                     
-                    {/* 標題欄 */}
-                    <header className="w-full max-w-md flex justify-between items-center mb-5">
-                        <div className="flex items-center gap-2.5">
-                            <div className="bg-orange-500 p-2 rounded-xl text-white shadow-lg">
-                                <PaletteIcon />
+                    {/* --- 繪本模式 A：起頭故事導言頁面 --- */}
+                    {gameStage === 'intro' && (
+                        <div className="w-full bg-white rounded-[45px] shadow-2xl p-8 text-center border-8 border-orange-200 mt-10 animate-fade-in flex flex-col items-center">
+                            <div className="text-8xl mb-6 animate-bounce">🐻🌲</div>
+                            <h1 className="text-3xl font-black text-gray-800 mb-4 tracking-wider">遇見小熊</h1>
+                            <div className="bg-orange-50 rounded-2xl p-5 mb-6 border border-orange-100 leading-relaxed text-left text-gray-700 font-medium">
+                                <p className="text-xl font-bold text-gray-900 mb-2">你在森林遇見了一隻小熊，</p>
+                                <p className="text-lg">小熊有色弱，分不清楚這些水果的顏色。小熊揉揉眼睛，小聲地請你幫忙將水果塗上正確的顏色...</p>
+                                <p className="font-en-storybook text-sm text-gray-400 italic mt-3">
+                                    You met a little bear in the forest. The bear has color weakness and cannot tell the colors of fruits. He asks you to help him color them correctly...
+                                </p>
                             </div>
-                            <div>
-                                <h1 className="font-black text-gray-800 text-lg">{lang === 'zh' ? '雙語著色大師' : 'Bilingual Coloring'}</h1>
-                                <p className="text-[10px] text-orange-500 font-bold uppercase tracking-widest">Fruits Garden</p>
-                            </div>
-                        </div>
-                        <button 
-                            onClick={() => {
-                                const nextLang = lang === 'zh' ? 'en' : 'zh';
-                                setLang(nextLang);
-                                speakBilingual(nextLang === 'zh' ? '中文' : 'English', '');
-                            }} 
-                            className="bg-white px-4 py-1.5 rounded-full text-sm font-bold shadow-md border-2 border-orange-100 hover:bg-orange-50 active:scale-95 transition-all flex items-center gap-1 text-gray-700"
-                        >
-                            <LanguagesIcon />
-                            {lang === 'zh' ? 'English' : '中文'}
-                        </button>
-                    </header>
-
-                    {/* 引導提問 */}
-                    <div className="text-center mb-5">
-                        <div className="inline-flex items-center bg-white px-5 py-2 rounded-2xl shadow-sm mb-3 border border-orange-100 gap-2">
-                            <h2 className="text-xl md:text-2xl font-black text-gray-800">
-                                {lang === 'zh' ? `${currentLevel.objectName.zh}是什麼顏色的呢？` : `What color is the ${currentLevel.objectName.en}?`}
-                            </h2>
                             <button 
-                                onClick={speakQuestion} 
-                                className="text-orange-400 hover:scale-110 active:scale-95 transition-transform"
+                                onClick={() => setGameStage('color')}
+                                className="bg-orange-500 text-white font-black text-xl py-4 px-10 rounded-2xl shadow-lg hover:bg-orange-600 active:scale-95 transition-all w-full"
                             >
-                                <VolumeIcon />
+                                好的！幫忙小熊 ➔
                             </button>
                         </div>
-                        
-                        <div className="flex items-center gap-3 justify-center text-gray-500 font-bold">
-                            <span className="text-xs">{lang === 'zh' ? '塗色進度' : 'Progress'}</span>
-                            <div className="w-44 h-3.5 bg-gray-200 rounded-full overflow-hidden border border-gray-300">
-                                <div className="h-full bg-green-400 transition-all duration-300" style={{width: `${Math.min(100, (coverage/75)*100)}%`}}></div>
-                            </div>
-                            <span className={`text-xs ${coverage >= 75 ? 'text-green-500 font-black' : ''}`}>{Math.round(Math.min(100, (coverage/75)*100))}%</span>
-                        </div>
-                    </div>
+                    )}
 
-                    {/* 畫布核心區 (CSS 物理外切法，百分之百置中、好塗且絕不溢出) */}
-                    <div className="relative w-full max-w-sm aspect-square bg-white rounded-[45px] shadow-2xl border-[10px] border-white overflow-hidden mb-6 flex items-center justify-center p-0">
-                        {/* 網格裝飾線 */}
-                        <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#000 1.5px, transparent 1.5px), linear-gradient(90deg, #000 1.5px, transparent 1.5px)', backgroundSize: '25px 25px', zIndex: 1 }} />
-                        
-                        {/* 置中固定 200x200 圖形定位框 */}
-                        <div className="relative w-[200px] h-[200px] flex items-center justify-center">
-                            
-                            {/* 核心修正：利用 CSS clip-path 對畫布進行物理剪裁，只要出了這條線，畫面完全不顯示，實現完美的防出界 */}
-                            <div 
-                                className="absolute inset-0 w-full h-full bg-[#FAFAFA]"
-                                style={{ 
-                                    clipPath: `path('${currentLevel.path}')`,
-                                    WebkitClipPath: `path('${currentLevel.path}')`,
-                                    zIndex: 10
-                                }}
+                    {/* --- 繪本模式 B：過渡故事轉場頁面 --- */}
+                    {gameStage === 'transition' && (
+                        <div className="w-full bg-white rounded-[45px] shadow-2xl p-8 text-center border-8 border-green-200 mt-10 animate-fade-in flex flex-col items-center">
+                            <div className="text-8xl mb-6 animate-pulse">🐻🧺🍇</div>
+                            <h1 className="text-3xl font-black text-green-700 mb-4 tracking-wider">小熊農夫的邀請</h1>
+                            <div className="bg-green-50 rounded-2xl p-5 mb-6 border border-green-100 leading-relaxed text-left text-gray-700 font-medium">
+                                <p className="text-xl font-bold text-green-900 mb-2">水果都被塗上漂亮的顏色了！</p>
+                                <p className="text-lg">小熊感到非常高興！原來，小熊是一個厲害的農夫，為了感謝你，他邀請你一起去他的大果園採摘成熟的水果！</p>
+                                <p className="font-en-storybook text-sm text-gray-400 italic mt-3">
+                                    You colored everything correctly, and the bear is so happy! He is a farmer and invites you to his orchard to pick fruits!
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => setGameStage('count')}
+                                className="bg-green-600 text-white font-black text-xl py-4 px-10 rounded-2xl shadow-lg hover:bg-green-700 active:scale-95 transition-all w-full"
                             >
-                                {/* 繪畫主畫布（直接接受塗色，100% 顯色） */}
-                                <canvas 
-                                    ref={canvasRef} 
-                                    width="200" 
-                                    height="200" 
-                                    onMouseDown={handleStart} 
-                                    onMouseMove={handleMove} 
-                                    onMouseUp={handleEnd} 
-                                    onMouseLeave={handleEnd}
-                                    onTouchStart={handleStart} 
-                                    onTouchMove={handleMove} 
-                                    onTouchEnd={handleEnd}
-                                    className="absolute inset-0 w-full h-full cursor-crosshair"
-                                />
-                            </div>
-                            
-                            {/* 第三層：永不被覆蓋的黑色藝術外框與細節 (放置在遮罩容器外，不受裁切影響) */}
-                            <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 20 }}>
-                                <path d={currentLevel.path} fill="none" stroke="#2D3436" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                                {renderLevelDetails(currentLevel.id)}
-                            </svg>
+                                出發去採水果 ➔
+                            </button>
                         </div>
+                    )}
 
-                        {/* 過關彈窗 */}
-                        {isCompleted && (
-                            <div className="absolute inset-0 z-30 bg-white/75 backdrop-blur-sm flex items-center justify-center animate-fade-in text-center p-4">
-                                <div className="animate-pop-in bg-white p-7 rounded-[35px] shadow-2xl border-4 border-green-400 max-w-[280px] w-full">
-                                    <div className="text-3xl mb-1 text-yellow-400 flex justify-center gap-1">
-                                        <StarIcon fill="currentColor" />
-                                        <div className="animate-bounce"><StarIcon fill="currentColor" /></div>
-                                        <StarIcon fill="currentColor" />
+                    {/* --- 繪本模式 C：核心遊戲互動介面 (著色與數數) --- */}
+                    {(gameStage === 'color' || gameStage === 'count') && (
+                        <div className="w-full flex flex-col items-center">
+                            {/* 頂部繪本導覽列 */}
+                            <header className="w-full flex items-center justify-center bg-orange-400 text-white py-3 px-6 rounded-3xl shadow-md mb-6">
+                                <h1 className="font-bold text-2xl tracking-wider">
+                                    {gameStage === 'color' ? '🎨 繪本第一章：幫幫小熊' : '🧺 繪本第二章：小熊的果園'}
+                                </h1>
+                            </header>
+
+                            {/* 大問句故事字幕區 */}
+                            <div className="w-full bg-white px-6 py-4 rounded-[32px] shadow-sm mb-6 border-2 border-orange-100 text-center relative flex flex-col justify-center items-center">
+                                <h2 className="text-2xl font-black text-gray-800 tracking-wider leading-snug">
+                                    {gameStage === 'color' ? `小熊分不清顏色，這是${currentColorLevel.objectName.zh}喔！它是什麼顏色的呢？` : currentCountLevel.questionZh}
+                                </h2>
+                                <p className="font-en-storybook text-base font-medium text-gray-400 italic mt-2">
+                                    {gameStage === 'color' ? `Bear cannot see colors. This is an ${currentColorLevel.objectName.en}! What color is it?` : currentCountLevel.questionEn}
+                                </p>
+                                <button 
+                                    onClick={speakQuestion} 
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xl bg-orange-50 hover:bg-orange-100 p-2 rounded-full transition-colors"
+                                >
+                                    🔊
+                                </button>
+                            </div>
+
+                            {/* 繪本核心交互畫布 */}
+                            <div className="relative w-full aspect-square bg-white rounded-[45px] shadow-2xl border-[12px] border-white overflow-hidden mb-6 flex items-center justify-center p-0">
+                                <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#000 1.5px, transparent 1.5px), linear-gradient(90deg, #000 1.5px, transparent 1.5px)', backgroundSize: '25px 25px', zIndex: 1 }} />
+                                
+                                {/* 著色關卡舞台 */}
+                                {gameStage === 'color' && (
+                                    <div key={`color-stage-${levelIdx}`} className="relative w-[200px] h-[200px] flex items-center justify-center touch-none animate-fade-in">
+                                        <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none z-10">
+                                            <path d={currentColorLevel.path} fill="#FAFAFA" stroke="#EAEAEA" strokeWidth="1" />
+                                        </svg>
+
+                                        <div 
+                                            className="absolute inset-0 w-full h-full"
+                                            style={{ 
+                                                clipPath: `path('${currentColorLevel.path}')`,
+                                                WebkitClipPath: `path('${currentColorLevel.path}')`,
+                                                zIndex: 20
+                                            }}
+                                        >
+                                            <canvas 
+                                                ref={canvasRef} 
+                                                width="200" 
+                                                height="200" 
+                                                onMouseDown={handleStart} 
+                                                onMouseMove={handleMove} 
+                                                onMouseUp={handleEnd} 
+                                                onMouseLeave={handleEnd}
+                                                onTouchStart={handleStart} 
+                                                onTouchMove={handleMove} 
+                                                onTouchEnd={handleEnd}
+                                                className="absolute inset-0 w-full h-full cursor-crosshair"
+                                            />
+                                        </div>
+
+                                        <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 30 }}>
+                                            <path d={currentColorLevel.path} fill="none" stroke="#2D3436" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                                            {renderLevelDetails(currentColorLevel.id)}
+                                        </svg>
                                     </div>
-                                    <p className="text-2xl font-black text-green-600 mb-0.5">{lang === 'zh' ? '太厲害了！' : 'EXCELLENT!'}</p>
-                                    <p className="text-xs text-gray-500 font-bold mb-5 leading-relaxed">
-                                        {lang === 'zh' ? `答對了！這是${selectedColor?.zh}的${currentLevel.objectName.zh}` : `Correct! This is a ${selectedColor?.en} ${currentLevel.objectName.en}`}
-                                    </p>
+                                )}
+
+                                {/* 數數採摘關卡舞台 */}
+                                {gameStage === 'count' && (
+                                    <div key={`count-stage-${levelIdx}`} className="relative w-full h-full p-4 flex flex-col justify-between items-center animate-fade-in touch-none">
+                                        <div className="relative w-full h-[65%] flex items-center justify-center">
+                                            <svg viewBox="0 0 200 130" className="absolute inset-0 w-full h-full pointer-events-none">
+                                                <path d="M 90,90 L 110,90 L 115,130 L 85,130 Z" fill="#9c6644" />
+                                                <circle cx="65" cy="55" r="40" fill="#2d6a4f" />
+                                                <circle cx="135" cy="55" r="40" fill="#2d6a4f" />
+                                                <circle cx="100" cy="45" r="45" fill="#40916c" />
+                                                <circle cx="70" cy="70" r="35" fill="#40916c" />
+                                                <circle cx="130" cy="70" r="35" fill="#40916c" />
+                                            </svg>
+                                            
+                                            {currentCountLevel.positions.map((pos, idx) => {
+                                                const isPicked = droppedFruits.includes(idx);
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => handleFruitClick(idx)}
+                                                        className={`absolute text-4xl p-1.5 transition-all duration-300 active:scale-125 ${isPicked ? 'fruit-falling pointer-events-none' : 'hover:scale-110 cursor-pointer animate-pulse'}`}
+                                                        style={{ 
+                                                            left: `${pos.x}%`, 
+                                                            top: `${pos.y}%`,
+                                                            animationDuration: `${2 + (idx % 3)}s`
+                                                        }}
+                                                    >
+                                                        {currentCountLevel.emoji}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        <div className="relative w-[75%] h-[28%] bg-amber-100 border-4 border-amber-600 rounded-b-3xl rounded-t-lg flex flex-col items-center justify-center shadow-md">
+                                            <div className="absolute -top-6 w-20 h-10 border-4 border-amber-600 rounded-t-full pointer-events-none" />
+                                            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #000 0, #000 2px, transparent 0, transparent 8px)' }} />
+                                            <span className="text-3xl font-black text-amber-950 z-10">
+                                                🧺 {basketCount} / {currentCountLevel.targetCount}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 水果標籤大名牌 */}
+                            <div className="w-full bg-orange-100/70 border-2 border-dashed border-orange-300 rounded-3xl p-4 text-center mb-6 shadow-inner">
+                                <div className="text-3xl font-black text-orange-900 flex items-center justify-center gap-2">
+                                    <span>{gameStage === 'color' ? currentColorLevel.emoji : currentCountLevel.emoji}</span>
+                                    {gameStage === 'color' ? currentColorLevel.objectName.zh : currentCountLevel.objectName.zh}
+                                </div>
+                                <div className="font-en-storybook text-lg font-semibold text-orange-600 tracking-wide uppercase mt-1">
+                                    {gameStage === 'color' ? currentColorLevel.objectName.en : currentCountLevel.objectName.en}
+                                </div>
+                            </div>
+
+                            {/* 底部互動工具面板 */}
+                            {gameStage === 'color' ? (
+                                <div className="w-full bg-white/95 backdrop-blur-md p-5 rounded-[36px] shadow-xl border border-white">
+                                    <div className="grid grid-cols-4 gap-4 mb-3 justify-items-center">
+                                        {COLORS.map(c => (
+                                            <button 
+                                                key={c.code} 
+                                                onClick={() => { 
+                                                    setSelectedColor(c); 
+                                                    speakBilingual(c.zh, currentColorLevel.targetColors.includes(c.code) ? c.en : ""); 
+                                                }}
+                                                className={`flex flex-col items-center transition-all duration-300 w-16 ${selectedColor?.code === c.code ? 'scale-110 -translate-y-2' : 'opacity-70 hover:opacity-100'}`}
+                                            >
+                                                <div className={`w-12 h-16 rounded-t-xl rounded-b-2xl border-4 ${selectedColor?.code === c.code ? 'border-orange-400 shadow-lg' : 'border-white shadow-md'}`} style={{backgroundColor: c.code}}>
+                                                    <div className="w-full h-6 bg-black/5 mt-4" />
+                                                </div>
+                                                <span className="text-base font-black mt-2 text-gray-600 tracking-wider">{c.zh}</span>
+                                            </button>
+                                        ))}
+                                        
+                                        <div className="col-span-4 w-full flex items-center justify-between gap-4 mt-2 bg-gray-50 p-3 rounded-2xl border border-gray-200">
+                                            <div className="flex items-center gap-2 flex-1">
+                                                <span className="text-sm font-black text-gray-500">進度</span>
+                                                <div className="flex-1 h-4 bg-gray-200 rounded-full overflow-hidden border border-gray-300">
+                                                    <div className="h-full bg-green-400 transition-all duration-300" style={{width: `${Math.min(100, (coverage/75)*100)}%`}}></div>
+                                                </div>
+                                                <span className="text-xs font-bold text-gray-600">{Math.round(Math.min(100, (coverage/75)*100))}%</span>
+                                            </div>
+                                            <button 
+                                                onClick={() => { 
+                                                    initCanvas();
+                                                    setCoverage(0);
+                                                    setIsCompleted(false);
+                                                    speakBilingual('重來一次', 'Try again');
+                                                }}
+                                                className="flex items-center gap-1 bg-red-100 text-red-600 px-4 py-2 rounded-xl font-black text-sm shadow-sm hover:bg-red-200 active:scale-95 transition-all"
+                                            >
+                                                🔄 重來
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="w-full bg-white/95 backdrop-blur-md p-4 rounded-[28px] shadow-xl border border-white text-center">
                                     <button 
-                                        onClick={() => setLevelIdx((levelIdx + 1) % LEVELS.length)} 
-                                        className="bg-green-500 text-white px-8 py-2.5 rounded-xl font-black shadow-lg hover:bg-green-600 active:scale-95 transition-all flex items-center justify-center gap-1 mx-auto w-full"
+                                        onClick={() => {
+                                            setBasketCount(0);
+                                            setDroppedFruits([]);
+                                            setIsCompleted(false);
+                                            speakBilingual('重新數數', 'Reset counting');
+                                        }}
+                                        className="inline-flex items-center justify-center gap-2 bg-amber-500 text-white font-black text-lg py-3 px-8 rounded-2xl shadow-md hover:bg-amber-600 active:scale-95 transition-all w-full"
                                     >
-                                        {lang === 'zh' ? '下一關' : 'Next'}
-                                        <ChevronRightIcon />
+                                        <RotateCcwIcon /> 重新把水果掛回樹上
                                     </button>
                                 </div>
-                                <Confetti />
-                            </div>
-                        )}
-                    </div>
+                            )}
+                        </div>
+                    )}
 
-                    {/* 彩色調色盤 */}
-                    <div className="grid grid-cols-3 sm:grid-cols-7 gap-4 bg-white/95 backdrop-blur-md p-5 rounded-[32px] shadow-xl border border-white max-w-lg w-full">
-                        {COLORS.map(c => (
-                            <button 
-                                key={c.code} 
-                                onClick={() => { 
-                                    setSelectedColor(c); 
-                                    speakBilingual(c.zh, currentLevel.targetColors.includes(c.code) ? c.en : ""); 
-                                }}
-                                className={`flex flex-col items-center transition-all duration-300 ${selectedColor?.code === c.code ? 'scale-110 -translate-y-2' : 'opacity-65 hover:opacity-100'}`}
-                            >
-                                <div className={`w-9 h-14 rounded-t-lg rounded-b-xl border-4 ${selectedColor?.code === c.code ? 'border-orange-300' : 'border-white'} shadow-md`} style={{backgroundColor: c.code}}>
-                                    <div className="w-full h-5 bg-black/5 mt-3" />
+                    {/* --- 全域過關彈窗 (最高級 z-50 權限圖層) --- */}
+                    {isCompleted && (
+                        <div className="fixed inset-0 z-50 bg-white/85 backdrop-blur-sm flex items-center justify-center animate-fade-in text-center p-4">
+                            <div className="animate-pop-in bg-white p-6 rounded-[35px] shadow-2xl border-4 border-green-400 max-w-[300px] w-full">
+                                <div className="text-3xl mb-2 flex justify-center gap-1.5">
+                                    ⭐️ ⭐ ⭐️
                                 </div>
-                                <span className="text-[10px] font-black mt-1.5 text-gray-500">{lang === 'zh' ? c.zh : c.en}</span>
-                            </button>
-                        ))}
-                        
-                        <button 
-                            onClick={() => { 
-                                initCanvas();
-                                setCoverage(0);
-                                setIsCompleted(false);
-                                speakBilingual('重來一次', 'Try again');
-                            }}
-                            className="flex flex-col items-center justify-center text-gray-400 hover:text-red-500 active:scale-90 transition-all"
-                        >
-                            <div className="w-9 h-14 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center mb-1">
-                                <RotateCcwIcon />
+                                <p className="text-3xl font-black text-green-600 mb-2">太厲害了！</p>
+                                
+                                {gameStage === 'color' ? (
+                                    <div>
+                                        <p className="text-xl text-gray-800 font-bold leading-relaxed">
+                                            小熊開心地拍手！<br/>這是{selectedColor?.zh}的{currentColorLevel.objectName.zh}！
+                                        </p>
+                                        <p className="font-en-storybook text-base text-gray-400 italic mb-5 mt-2">
+                                            Bear claps happily! This is a {selectedColor?.en} {currentColorLevel.objectName.en}!
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <p className="text-xl text-gray-800 font-bold leading-relaxed">
+                                            小熊農夫向你鞠躬！<br/>你成功採收了 {currentCountLevel.targetCount} 顆{currentCountLevel.objectName.zh}！
+                                        </p>
+                                        <p className="font-en-storybook text-base text-gray-400 italic mb-5 mt-2">
+                                            Farmer Bear bows to you! You harvested {currentCountLevel.targetCount} {currentCountLevel.objectName.en}!
+                                        </p>
+                                    </div>
+                                )}
+                                
+                                <button 
+                                    onClick={handleNextLevel} 
+                                    className="bg-green-500 text-white px-8 py-3 rounded-2xl font-bold text-xl shadow-lg hover:bg-green-600 active:scale-95 transition-all flex items-center justify-center gap-2 mx-auto w-full cursor-pointer"
+                                >
+                                    {gameStage === 'color' && levelIdx + 1 === COLOR_LEVELS.length ? '謝謝小熊，出發果園！ ➔' : gameStage === 'count' && levelIdx + 1 === COUNT_LEVELS.length ? '再玩一次 ➔' : '下一關 ➔'}
+                                </button>
                             </div>
-                            <span className="text-[9px] font-black">RESET</span>
-                        </button>
-                    </div>
+                            <Confetti />
+                        </div>
+                    )}
+
                 </div>
             );
         };
