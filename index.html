@@ -198,7 +198,6 @@
                 }
             };
 
-            // 核心修改：將 initCanvas 改為可重複呼叫，並加入安全檢查
             const initCanvas = () => {
                 if (gameStage !== 'color' || !canvasRef.current || !maskCanvasRef.current) return;
                 
@@ -215,17 +214,16 @@
                 mCtx.fill(pathObj);
             };
 
-            // 核心修改：利用 setTimeout 確保 React 完成畫布 DOM 的重新掛載後，才執行初始化
             useEffect(() => {
                 if (gameStage === 'color') {
                     const timer = setTimeout(() => {
                         initCanvas();
-                    }, 60); // 給予 DOM 足夠的渲染緩衝時間
+                    }, 60);
                     return () => clearTimeout(timer);
                 }
             }, [levelIdx, gameStage]);
 
-            // 故事章節切換與語音導覽副作用
+            // 故事導覽與初始載入監聽
             useEffect(() => {
                 if (gameStage === 'intro') {
                     speakBilingual("你在森林遇見了一隻小熊。小熊有色弱，分不清楚水果的顏色，你能幫幫牠嗎？", "You met a little bear in the forest. The bear is colorblind and cannot tell the colors of fruits. Can you help him?");
@@ -237,15 +235,18 @@
                     setSelectedColor(null);
                     setTimeout(() => speakQuestion(), 150);
                 } else if (gameStage === 'count') {
-                    setBasketCount(0);
-                    setDroppedFruits([]);
-                    setIsCompleted(false);
-                    setSelectedColor(null);
                     setTimeout(() => speakQuestion(), 150);
                 }
             }, [levelIdx, gameStage]);
 
+            // 核心修正：在下一關點擊時同步清空前一關的狀態，防止陣列殘留
             const handleNextLevel = () => {
+                setIsCompleted(false);
+                setBasketCount(0);
+                setDroppedFruits([]);
+                setSelectedColor(null);
+                setCoverage(0);
+
                 if (gameStage === 'color') {
                     if (levelIdx + 1 < COLOR_LEVELS.length) {
                         setLevelIdx(levelIdx + 1);
@@ -563,7 +564,7 @@
                                                 const isPicked = droppedFruits.includes(idx);
                                                 return (
                                                     <button
-                                                        key={idx}
+                                                        key={`${levelIdx}-${idx}`}
                                                         onClick={() => handleFruitClick(idx)}
                                                         className={`absolute text-4xl p-1.5 transition-all duration-300 active:scale-125 ${isPicked ? 'fruit-falling pointer-events-none' : 'hover:scale-110 cursor-pointer animate-pulse'}`}
                                                         style={{ 
